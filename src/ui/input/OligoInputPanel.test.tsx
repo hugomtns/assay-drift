@@ -111,4 +111,41 @@ describe('OligoInputPanel', () => {
     expect(useAppStore.getState().roles['oligo-0']).toBeUndefined();
     expect(screen.getByText(/choose a role/i)).toBeInTheDocument();
   });
+
+  // Regression test (added post-review, invariant 3): two distinct oligo
+  // entries that happen to share an identical sequence -- distinguishable to
+  // the user only by their default names "Oligo 1"/"Oligo 2" -- must not
+  // collide in the manual-role cache. A role chosen for the first must not
+  // bleed onto the second, including across a re-parse triggered by an
+  // unrelated edit elsewhere in the text.
+  it('does not bleed a manual role onto a different entry with the same sequence', async () => {
+    render(<OligoInputPanel />);
+    const textarea = screen.getByLabelText(/paste your oligos/i);
+    const user = userEvent.setup();
+
+    await user.click(textarea);
+    await user.paste('ACGTACGTACGTACGTACGT\nACGTACGTACGTACGTACGT');
+
+    const selectOne = await screen.findByLabelText(/role for Oligo 1/i);
+    await userEvent.selectOptions(selectOne, 'probe');
+    expect(useAppStore.getState().roles['oligo-0']).toBe('probe');
+    expect(useAppStore.getState().roles['oligo-1']).toBeUndefined();
+
+    // Let the debounced commit for the paste land.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(useAppStore.getState().roles['oligo-0']).toBe('probe');
+    expect(useAppStore.getState().roles['oligo-1']).toBeUndefined();
+
+    // Trigger a re-parse via an unrelated edit: append a third, distinct oligo.
+    await user.type(textarea, '\n>N3-F\nGACCCCAAAATCAGCGAAAT');
+    await screen.findByText('N3-F');
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    // The first oligo keeps its manual role; the second -- same sequence,
+    // never touched -- must still have none.
+    expect(useAppStore.getState().roles['oligo-0']).toBe('probe');
+    expect(useAppStore.getState().roles['oligo-1']).toBeUndefined();
+    expect(screen.getByLabelText(/role for Oligo 2/i)).toHaveValue('');
+    expect(screen.getByText(/choose a role/i)).toBeInTheDocument();
+  });
 });

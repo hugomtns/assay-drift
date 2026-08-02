@@ -19,7 +19,7 @@ const DEBOUNCE_MS = 200;
  * `setOligos` (from the store) fully replaces `roles` with only the
  * freshly-guessed ones, so a manually-picked role would otherwise be wiped
  * out by the next debounced commit triggered by an unrelated textarea edit.
- * `manualRolesRef` remembers every role a user explicitly chose via
+ * `manualRolesByKeyRef` remembers every role a user explicitly chose via
  * `RoleSelector`, and each debounced commit reapplies them straight after
  * `setOligos`, so an explicit choice survives later edits elsewhere in the
  * text.
@@ -27,36 +27,55 @@ const DEBOUNCE_MS = 200;
  * Crucially, `oligoId` (`oligo-${index}` from `parseOligoText`) is a
  * positional id, not a stable identity -- editing the text can make a
  * *different* oligo land at the same index a previous one occupied (e.g.
- * selecting all and pasting fresh content). So `manualRolesRef` is keyed by
- * the oligo's `sequence` (its actual content) rather than its id: on each
- * debounced commit we only reapply a remembered role to whichever *current*
- * oligo still has that exact sequence, at whatever id it currently holds.
- * A remembered role for a sequence no longer present in the parsed output
- * is simply never reapplied.
+ * selecting all and pasting fresh content). Keying purely by `sequence`
+ * isn't enough either: two distinct entries can share an identical
+ * sequence (e.g. two bare lines with the same content), and would then
+ * collide on one key. So each oligo's key is its sequence *plus* its
+ * 0-based occurrence rank among same-sequence entries within that same
+ * parse (`buildOligoKeys`) -- e.g. the first "ACGT..." entry is
+ * `ACGT...::0`, a second identical one is `ACGT...::1`. On each debounced
+ * commit we reapply a remembered role only to whichever *current* oligo
+ * resolves to that same key, at whatever id it currently holds. A
+ * remembered role whose key no longer resolves to any current oligo (its
+ * sequence is gone, or there are now fewer same-sequence occurrences) is
+ * simply never reapplied.
  */
+function buildOligoKeys(oligos: ReadonlyArray<{ id: string; sequence: string }>): Map<string, string> {
+  const occurrenceCounts = new Map<string, number>();
+  const keysByOligoId = new Map<string, string>();
+  for (const oligo of oligos) {
+    const occurrence = occurrenceCounts.get(oligo.sequence) ?? 0;
+    occurrenceCounts.set(oligo.sequence, occurrence + 1);
+    keysByOligoId.set(oligo.id, `${oligo.sequence}::${occurrence}`);
+  }
+  return keysByOligoId;
+}
+
 export function OligoInputPanel() {
   const [text, setText] = useState('');
   const roles = useAppStore((s) => s.roles);
   const setOligos = useAppStore((s) => s.setOligos);
   const setRole = useAppStore((s) => s.setRole);
-  const manualRolesBySequenceRef = useRef<Record<string, OligoRole>>({});
+  const manualRolesByKeyRef = useRef<Record<string, OligoRole>>({});
 
   const parsed = useMemo(() => parseOligoText(text), [text]);
+  const oligoKeys = useMemo(() => buildOligoKeys(parsed.oligos), [parsed]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setOligos(parsed.oligos);
       for (const oligo of parsed.oligos) {
-        const manualRole = manualRolesBySequenceRef.current[oligo.sequence];
+        const key = oligoKeys.get(oligo.id);
+        const manualRole = key === undefined ? undefined : manualRolesByKeyRef.current[key];
         if (manualRole !== undefined) setRole(oligo.id, manualRole);
       }
     }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [parsed, setOligos, setRole]);
+  }, [parsed, oligoKeys, setOligos, setRole]);
 
   const handleRoleChange = (oligoId: string, role: OligoRole) => {
-    const oligo = parsed.oligos.find((o) => o.id === oligoId);
-    if (oligo !== undefined) manualRolesBySequenceRef.current[oligo.sequence] = role;
+    const key = oligoKeys.get(oligoId);
+    if (key !== undefined) manualRolesByKeyRef.current[key] = role;
     setRole(oligoId, role);
   };
 
