@@ -50,4 +50,33 @@ describe('OligoInputPanel', () => {
     await userEvent.selectOptions(screen.getByLabelText(/role for Oligo 1/i), 'forward');
     expect(button).toBeEnabled();
   });
+
+  // Regression test (added post-review, not part of the brief's verbatim five):
+  // a manually-chosen role for one oligo must survive a later, unrelated edit
+  // to the textarea -- it must not be silently reverted by the next debounced
+  // store commit, which reseeds `roles` from fresh guesses only.
+  it('keeps a manually-chosen role after an unrelated later edit', async () => {
+    render(<OligoInputPanel />);
+    const textarea = screen.getByLabelText(/paste your oligos/i);
+    const user = userEvent.setup();
+    await user.click(textarea);
+    await user.paste('ACGTACGTACGTACGTACGT');
+
+    const select = await screen.findByLabelText(/role for Oligo 1/i);
+    await userEvent.selectOptions(select, 'probe');
+    expect(useAppStore.getState().roles['oligo-0']).toBe('probe');
+
+    // Let the debounced store commit for the paste fire.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(useAppStore.getState().roles['oligo-0']).toBe('probe');
+
+    // Edit the textarea elsewhere: append a second, unrelated oligo.
+    await user.type(textarea, '\n>N2-F\nGACCCCAAAATCAGCGAAAT');
+    await screen.findByText('N2-F');
+
+    // Let that debounced commit fire too, and confirm it did not wipe the
+    // manual choice for the untouched first oligo.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(useAppStore.getState().roles['oligo-0']).toBe('probe');
+  });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { parseOligoText, type OligoRole } from '../../core/oligo-input';
 import { useAppStore } from '../../state/store';
 import { RoleSelector } from './RoleSelector';
@@ -15,23 +15,36 @@ const DEBOUNCE_MS = 200;
  * screen. Only the write into the shared store -- which reseeds `roles`
  * from the fresh guesses and clears downstream analysis state -- is
  * debounced, so rapid keystrokes don't churn global state.
+ *
+ * `setOligos` (from the store) fully replaces `roles` with only the
+ * freshly-guessed ones, so a manually-picked role would otherwise be wiped
+ * out by the next debounced commit triggered by an unrelated textarea edit.
+ * `manualRolesRef` remembers every role a user explicitly chose via
+ * `RoleSelector` for the lifetime of this mounted component, and each
+ * debounced commit reapplies them straight after `setOligos`, so an
+ * explicit choice survives later edits elsewhere in the text.
  */
 export function OligoInputPanel() {
   const [text, setText] = useState('');
   const roles = useAppStore((s) => s.roles);
   const setOligos = useAppStore((s) => s.setOligos);
   const setRole = useAppStore((s) => s.setRole);
+  const manualRolesRef = useRef<Record<string, OligoRole>>({});
 
   const parsed = useMemo(() => parseOligoText(text), [text]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setOligos(parsed.oligos);
+      for (const [oligoId, role] of Object.entries(manualRolesRef.current)) {
+        setRole(oligoId, role);
+      }
     }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [parsed, setOligos]);
+  }, [parsed, setOligos, setRole]);
 
   const handleRoleChange = (oligoId: string, role: OligoRole) => {
+    manualRolesRef.current[oligoId] = role;
     setRole(oligoId, role);
   };
 
