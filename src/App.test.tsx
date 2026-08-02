@@ -7,7 +7,7 @@ describe('App', () => {
     render(<App />);
     expect(screen.getByRole('heading', { name: /assay drift watch/i })).toBeInTheDocument();
     expect(
-      screen.getByText(/research and educational tool, not a diagnostic device/i),
-    ).toBeInTheDocument();
+      screen.getAllByText(/research and educational tool, not a diagnostic device/i).length,
+    ).toBeGreaterThan(0);
   });
 });

@@ -1,10 +1,12 @@
+import { useAppStore } from './state/store';
+import { AppShell } from './ui/AppShell';
+
 export default function App() {
+  const step = useAppStore((s) => s.step);
+
   return (
-    <main className="mx-auto max-w-5xl p-6">
-      <h1 className="text-2xl font-semibold">Assay Drift Watch</h1>
-      <p className="mt-2 text-sm">
-        A research and educational tool, not a diagnostic device. Not for clinical decision-making.
-      </p>
-    </main>
+    <AppShell step={step}>
+      <p className="text-sm text-slate-500">Step content lands in later tasks.</p>
+    </AppShell>
   );
 }
