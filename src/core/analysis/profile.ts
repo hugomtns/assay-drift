@@ -41,6 +41,31 @@ function statFor(
   const coverage = rows.length > 0 ? (rows[0] as MutationRow).coverage : null;
   const effectiveDenominator = coverage ?? fallbackDenominator;
 
+  // The reference base itself is unusable (non-ACGT), so acceptedAlleles can never
+  // contain it and any mismatch inference here would be fabricated, not derived from
+  // what LAPIS reported. Mirrors query.ts's usablePositions(), which excludes these
+  // positions from the LAPIS query entirely; referenceIsAmbiguous is the signal a
+  // consumer must check before trusting this position's mismatch numbers.
+  if (spec.referenceIsAmbiguous) {
+    return {
+      refPos: spec.refPos,
+      oligoIndex: spec.oligoIndex,
+      oligoBase: spec.oligoBase,
+      plusStrandBase: spec.plusStrandBase,
+      refBase: spec.refBase,
+      distanceFrom3Prime: spec.distanceFrom3Prime,
+      coverage,
+      coverageIsInferred: coverage === null,
+      effectiveDenominator,
+      mismatchCount: 0,
+      substitutionCount: 0,
+      deletionCount: 0,
+      mismatchFraction: 0,
+      alleles: [],
+      referenceIsAmbiguous: true,
+    };
+  }
+
   const alleles: AlleleStat[] = rows.map((r) => ({
     allele: r.mutationTo,
     count: r.count,

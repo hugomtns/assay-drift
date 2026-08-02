@@ -127,3 +127,28 @@ describe('buildPositionProfile', () => {
     expect(p.mismatchFraction).toBeLessThanOrEqual(1);
   });
 });
+
+describe('buildPositionProfile — ambiguous reference base', () => {
+  const AMBIG: ReferenceGenome = {
+    pathogenId: 'test',
+    segments: [{ name: 'main', sequence: 'GGGGATGNATGCAAAA' }],
+  };
+  const ambigWindow = () =>
+    buildWindowSpec(findBindingSites('ATGCATGC', AMBIG)[0]!, 'ATGCATGC', AMBIG, 'forward', { segmented: false });
+
+  it('does not fabricate a mismatch count when there is no data', () => {
+    const p = buildPositionProfile(ambigWindow(), [], 1000)[3]!; // refPos 8, ref base N
+    expect(p.referenceIsAmbiguous).toBe(true);
+    expect(p.mismatchCount).toBe(0);
+    expect(p.mismatchFraction).toBe(0);
+    expect(p.alleles).toEqual([]);
+  });
+
+  it('does not fabricate a mismatch count from real rows either', () => {
+    const rows = [row({ position: 8, mutationFrom: 'N', mutationTo: 'A', count: 60, coverage: 1000 })];
+    const p = buildPositionProfile(ambigWindow(), rows, 1000)[3]!;
+    expect(p.referenceIsAmbiguous).toBe(true);
+    expect(p.mismatchCount).toBe(0);
+    expect(p.alleles).toEqual([]);
+  });
+});
