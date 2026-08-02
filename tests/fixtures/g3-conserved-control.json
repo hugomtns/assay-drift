@@ -1,0 +1,70 @@
+[
+  {
+    "request": {
+      "baseUrl": "https://lapis.cov-spectrum.org/open/v2",
+      "endpoint": "aggregated",
+      "body": {
+        "country": [
+          "United Kingdom"
+        ],
+        "dateFrom": "2024-01-01",
+        "dateTo": "2025-06-30"
+      }
+    },
+    "response": {
+      "data": [
+        {
+          "count": 46667
+        }
+      ],
+      "dataVersion": "1785342597",
+      "requestId": "a46abeac-2771-497c-b73a-70130fe42075"
+    }
+  },
+  {
+    "request": {
+      "baseUrl": "https://lapis.cov-spectrum.org/open/v2",
+      "endpoint": "aggregated",
+      "body": {
+        "country": [
+          "United Kingdom"
+        ],
+        "dateFrom": "2024-01-01",
+        "dateTo": "2025-06-30",
+        "advancedQuery": "!(15784N | 15785N | 15786N | 15787N | 15788N | 15789N | 15790N | 15791N | 15792N | 15793N | 15794N | 15795N | 15796N | 15797N | 15798N | 15799N | 15800N | 15801N | 15802N | 15803N | 15804N | 15805N)"
+      }
+    },
+    "response": {
+      "data": [
+        {
+          "count": 44669
+        }
+      ],
+      "dataVersion": "1785342597",
+      "requestId": "c68a93a8-a36c-4555-b4a8-07631037f9d3"
+    }
+  },
+  {
+    "request": {
+      "baseUrl": "https://lapis.cov-spectrum.org/open/v2",
+      "endpoint": "aggregated",
+      "body": {
+        "country": [
+          "United Kingdom"
+        ],
+        "dateFrom": "2024-01-01",
+        "dateTo": "2025-06-30",
+        "advancedQuery": "(15784 | 15785 | 15786 | 15787 | 15788 | 15789 | 15790 | 15791 | 15792 | 15793 | 15794 | 15795 | 15796 | 15797 | 15798 | 15799 | 15800 | 15801 | 15802 | 15803 | 15804 | 15805) & !(15784N | 15785N | 15786N | 15787N | 15788N | 15789N | 15790N | 15791N | 15792N | 15793N | 15794N | 15795N | 15796N | 15797N | 15798N | 15799N | 15800N | 15801N | 15802N | 15803N | 15804N | 15805N)"
+      }
+    },
+    "response": {
+      "data": [
+        {
+          "count": 3
+        }
+      ],
+      "dataVersion": "1785342597",
+      "requestId": "37335bca-3ff1-43da-a895-76a04ee45e2b"
+    }
+  }
+]

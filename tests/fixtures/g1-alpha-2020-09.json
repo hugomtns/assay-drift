@@ -1,0 +1,70 @@
+[
+  {
+    "request": {
+      "baseUrl": "https://lapis.cov-spectrum.org/open/v2",
+      "endpoint": "aggregated",
+      "body": {
+        "country": [
+          "United Kingdom"
+        ],
+        "dateFrom": "2020-09-01",
+        "dateTo": "2020-10-01"
+      }
+    },
+    "response": {
+      "data": [
+        {
+          "count": 18892
+        }
+      ],
+      "dataVersion": "1785342597",
+      "requestId": "36355807-57e0-4103-8b96-75ed9db2c3fe"
+    }
+  },
+  {
+    "request": {
+      "baseUrl": "https://lapis.cov-spectrum.org/open/v2",
+      "endpoint": "aggregated",
+      "body": {
+        "country": [
+          "United Kingdom"
+        ],
+        "dateFrom": "2020-09-01",
+        "dateTo": "2020-10-01",
+        "advancedQuery": "!(21765N | 21766N | 21767N | 21768N | 21769N | 21770N | 21771N | 21772N | 21773N | 21774N | 21775N | 21776N | 21777N | 21778N | 21779N | 21780N | 21781N | 21782N | 21783N | 21784N | 21785N | 21786N)"
+      }
+    },
+    "response": {
+      "data": [
+        {
+          "count": 18747
+        }
+      ],
+      "dataVersion": "1785342597",
+      "requestId": "b7c5ecbd-aa03-4416-b756-e6f45ba4a90b"
+    }
+  },
+  {
+    "request": {
+      "baseUrl": "https://lapis.cov-spectrum.org/open/v2",
+      "endpoint": "aggregated",
+      "body": {
+        "country": [
+          "United Kingdom"
+        ],
+        "dateFrom": "2020-09-01",
+        "dateTo": "2020-10-01",
+        "advancedQuery": "(21765 | 21766 | 21767 | 21768 | 21769 | 21770 | 21771 | 21772 | 21773 | 21774 | 21775 | 21776 | 21777 | 21778 | 21779 | 21780 | 21781 | 21782 | 21783 | 21784 | 21785 | 21786) & !(21765N | 21766N | 21767N | 21768N | 21769N | 21770N | 21771N | 21772N | 21773N | 21774N | 21775N | 21776N | 21777N | 21778N | 21779N | 21780N | 21781N | 21782N | 21783N | 21784N | 21785N | 21786N)"
+      }
+    },
+    "response": {
+      "data": [
+        {
+          "count": 612
+        }
+      ],
+      "dataVersion": "1785342597",
+      "requestId": "a0491878-af7f-4232-87f5-a91aa90ac4df"
+    }
+  }
+]

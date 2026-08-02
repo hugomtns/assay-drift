@@ -1,0 +1,61 @@
+[
+  {
+    "request": {
+      "baseUrl": "https://lapis.genspectrum.org/h3n2",
+      "endpoint": "aggregated",
+      "body": {
+        "sampleCollectionDateRangeLowerFrom": "2025-01-01",
+        "sampleCollectionDateRangeUpperTo": "2025-12-31"
+      }
+    },
+    "response": {
+      "data": [
+        {
+          "count": 22480
+        }
+      ],
+      "dataVersion": "1785484000",
+      "requestId": "b369b73c-31ff-4c26-a125-238ed49ac9ff"
+    }
+  },
+  {
+    "request": {
+      "baseUrl": "https://lapis.genspectrum.org/h3n2",
+      "endpoint": "aggregated",
+      "body": {
+        "sampleCollectionDateRangeLowerFrom": "2025-01-01",
+        "sampleCollectionDateRangeUpperTo": "2025-12-31",
+        "advancedQuery": "!(seg4:600N | seg4:601N | seg4:602N | seg4:603N | seg4:604N | seg4:605N | seg4:606N | seg4:607N | seg4:608N | seg4:609N | seg4:610N | seg4:611N | seg4:612N | seg4:613N | seg4:614N | seg4:615N | seg4:616N | seg4:617N | seg4:618N | seg4:619N | seg4:620N | seg4:621N)"
+      }
+    },
+    "response": {
+      "data": [
+        {
+          "count": 22445
+        }
+      ],
+      "dataVersion": "1785484000",
+      "requestId": "c98e67c4-eadc-4e0a-8588-3a317751412d"
+    }
+  },
+  {
+    "request": {
+      "baseUrl": "https://lapis.genspectrum.org/h3n2",
+      "endpoint": "aggregated",
+      "body": {
+        "sampleCollectionDateRangeLowerFrom": "2025-01-01",
+        "sampleCollectionDateRangeUpperTo": "2025-12-31",
+        "advancedQuery": "(seg4:600 | seg4:601 | seg4:602 | seg4:603 | seg4:604 | seg4:605 | seg4:606 | seg4:607 | seg4:608 | seg4:609 | seg4:610 | seg4:611 | seg4:612 | seg4:613 | seg4:614 | seg4:615 | seg4:616 | seg4:617 | seg4:618 | seg4:619 | seg4:620 | seg4:621) & !(seg4:600N | seg4:601N | seg4:602N | seg4:603N | seg4:604N | seg4:605N | seg4:606N | seg4:607N | seg4:608N | seg4:609N | seg4:610N | seg4:611N | seg4:612N | seg4:613N | seg4:614N | seg4:615N | seg4:616N | seg4:617N | seg4:618N | seg4:619N | seg4:620N | seg4:621N)"
+      }
+    },
+    "response": {
+      "data": [
+        {
+          "count": 22380
+        }
+      ],
+      "dataVersion": "1785484000",
+      "requestId": "be7a3536-8c1e-400f-8d33-5ee3df772b48"
+    }
+  }
+]

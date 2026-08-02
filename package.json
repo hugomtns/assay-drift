@@ -14,10 +14,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:live": "vitest run --config vitest.live.config.ts",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "refs": "tsx scripts/fetch-references.ts"
+    "refs": "tsx scripts/fetch-references.ts",
+    "fixtures": "tsx scripts/record-fixtures.ts"
   },
   "dependencies": {
     "react": "^19.2.8",
