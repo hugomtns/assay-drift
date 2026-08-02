@@ -67,3 +67,16 @@ describe('degeneracyProduct', () => {
     expect(degeneracyProduct('AYRN')).toBe(2 * 2 * 4);
   });
 });
+
+import { complementBase } from './iupac';
+
+describe('complementBase', () => {
+  it('complements single bases including degenerate codes', () => {
+    expect(complementBase('A')).toBe('T');
+    expect(complementBase('Y')).toBe('R');
+    expect(complementBase('N')).toBe('N');
+  });
+  it('throws on an unknown code', () => {
+    expect(() => complementBase('-')).toThrow();
+  });
+});

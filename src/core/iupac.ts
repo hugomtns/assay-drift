@@ -56,3 +56,9 @@ export function degeneracyProduct(seq: string): number {
   for (const ch of seq) product *= acceptedBases(ch).size;
   return product;
 }
+
+export function complementBase(code: string): string {
+  const comp = COMPLEMENT[code];
+  if (comp === undefined) throw new Error(`Cannot complement "${code}"`);
+  return comp;
+}
