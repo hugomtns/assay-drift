@@ -20,31 +20,43 @@ const DEBOUNCE_MS = 200;
  * freshly-guessed ones, so a manually-picked role would otherwise be wiped
  * out by the next debounced commit triggered by an unrelated textarea edit.
  * `manualRolesRef` remembers every role a user explicitly chose via
- * `RoleSelector` for the lifetime of this mounted component, and each
- * debounced commit reapplies them straight after `setOligos`, so an
- * explicit choice survives later edits elsewhere in the text.
+ * `RoleSelector`, and each debounced commit reapplies them straight after
+ * `setOligos`, so an explicit choice survives later edits elsewhere in the
+ * text.
+ *
+ * Crucially, `oligoId` (`oligo-${index}` from `parseOligoText`) is a
+ * positional id, not a stable identity -- editing the text can make a
+ * *different* oligo land at the same index a previous one occupied (e.g.
+ * selecting all and pasting fresh content). So `manualRolesRef` is keyed by
+ * the oligo's `sequence` (its actual content) rather than its id: on each
+ * debounced commit we only reapply a remembered role to whichever *current*
+ * oligo still has that exact sequence, at whatever id it currently holds.
+ * A remembered role for a sequence no longer present in the parsed output
+ * is simply never reapplied.
  */
 export function OligoInputPanel() {
   const [text, setText] = useState('');
   const roles = useAppStore((s) => s.roles);
   const setOligos = useAppStore((s) => s.setOligos);
   const setRole = useAppStore((s) => s.setRole);
-  const manualRolesRef = useRef<Record<string, OligoRole>>({});
+  const manualRolesBySequenceRef = useRef<Record<string, OligoRole>>({});
 
   const parsed = useMemo(() => parseOligoText(text), [text]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setOligos(parsed.oligos);
-      for (const [oligoId, role] of Object.entries(manualRolesRef.current)) {
-        setRole(oligoId, role);
+      for (const oligo of parsed.oligos) {
+        const manualRole = manualRolesBySequenceRef.current[oligo.sequence];
+        if (manualRole !== undefined) setRole(oligo.id, manualRole);
       }
     }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [parsed, setOligos, setRole]);
 
   const handleRoleChange = (oligoId: string, role: OligoRole) => {
-    manualRolesRef.current[oligoId] = role;
+    const oligo = parsed.oligos.find((o) => o.id === oligoId);
+    if (oligo !== undefined) manualRolesBySequenceRef.current[oligo.sequence] = role;
     setRole(oligoId, role);
   };
 

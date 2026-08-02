@@ -79,4 +79,36 @@ describe('OligoInputPanel', () => {
     await new Promise((resolve) => setTimeout(resolve, 250));
     expect(useAppStore.getState().roles['oligo-0']).toBe('probe');
   });
+
+  // Regression test (added post-review, invariant 2): a manual role must
+  // never bleed onto a *different* oligo that happens to reuse the same
+  // positional id (`oligo-0`) after the textarea content is fully replaced.
+  it('does not carry a manual role over to a different oligo at the same position', async () => {
+    render(<OligoInputPanel />);
+    const textarea = screen.getByLabelText(/paste your oligos/i);
+    const user = userEvent.setup();
+
+    await user.click(textarea);
+    await user.paste('ACGTACGTACGTACGTACGT');
+    const select = await screen.findByLabelText(/role for Oligo 1/i);
+    await userEvent.selectOptions(select, 'probe');
+    expect(useAppStore.getState().roles['oligo-0']).toBe('probe');
+
+    // Let the first oligo's debounced commit land.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(useAppStore.getState().roles['oligo-0']).toBe('probe');
+
+    // Replace the entire textarea content with a different, also-unguessable
+    // oligo -- it lands at the same position (and so the same `oligo-0` id)
+    // as the one the manual role was chosen for.
+    await user.clear(textarea);
+    await user.paste('TTTTTTTTTTTTTTTTTTTT');
+    await screen.findByText(/20 nt/);
+
+    // Let the replacement's debounced commit fire.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    expect(useAppStore.getState().roles['oligo-0']).toBeUndefined();
+    expect(screen.getByText(/choose a role/i)).toBeInTheDocument();
+  });
 });
