@@ -1,5 +1,5 @@
 import { defineConfig, mergeConfig } from 'vitest/config';
-import base from './vitest.config';
+import base from './vitest.config.ts';
 
 // mergeConfig concatenates array fields rather than replacing them, so the
 // base config's `exclude: [..., '**/*.live.test.ts']` (added in vitest.config.ts
@@ -18,7 +18,7 @@ const merged = mergeConfig(
 );
 
 if (merged.test?.exclude) {
-  merged.test.exclude = merged.test.exclude.filter((pattern) => pattern !== '**/*.live.test.ts');
+  merged.test.exclude = merged.test.exclude.filter((pattern: string) => pattern !== '**/*.live.test.ts');
 }
 
 export default merged;

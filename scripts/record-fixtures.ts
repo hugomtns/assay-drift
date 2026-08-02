@@ -7,10 +7,10 @@
  */
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { getPathogen } from '../src/core/registry';
-import { createFetchTransport } from '../src/core/lapis/fetch-transport';
-import type { LapisRequest } from '../src/core/lapis/transport';
-import type { FixtureRecord } from '../src/core/lapis/fixture-transport';
+import { getPathogen } from '../src/core/registry.js';
+import { createFetchTransport } from '../src/core/lapis/fetch-transport.js';
+import type { LapisRequest } from '../src/core/lapis/transport.js';
+import type { FixtureRecord } from '../src/core/lapis/fixture-transport.js';
 
 const OUT = join(process.cwd(), 'tests', 'fixtures');
 const transport = createFetchTransport();

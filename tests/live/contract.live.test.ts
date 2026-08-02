@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { createFetchTransport } from '../../src/core/lapis/fetch-transport';
-import { queryAggregated, queryNucleotideMutations } from '../../src/core/lapis/endpoints';
-import { getPathogen, PATHOGENS } from '../../src/core/registry';
-import { loadReference } from '../../src/data/references';
+import { createFetchTransport } from '../../src/core/lapis/fetch-transport.js';
+import { queryAggregated, queryNucleotideMutations } from '../../src/core/lapis/endpoints.js';
+import { getPathogen, PATHOGENS } from '../../src/core/registry.js';
+import { loadReference } from '../../src/data/references/index.js';
 
 const transport = createFetchTransport();
 

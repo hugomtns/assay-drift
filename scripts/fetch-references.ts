@@ -10,7 +10,7 @@
  */
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { PATHOGENS } from '../src/core/registry';
+import { PATHOGENS } from '../src/core/registry.js';
 
 interface ReferenceGenomeResponse {
   nucleotideSequences: { name: string; sequence: string }[];
