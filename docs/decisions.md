@@ -26,3 +26,14 @@ Production URL: https://assay-drift.vercel.app (project `assay-drift`, team
 `hmmartins-gmailcoms-projects`). Deployed manually by the human via the Vercel dashboard
 after the Vercel MCP integration returned a 403 (no project-creation permission on the
 connected team) when an agent attempted it directly.
+
+## 2026-08-02 — `tsconfig.node.json` uses `esnext`/`bundler`, not `nodenext`
+
+Widening `tsconfig.node.json`'s `include` to cover `scripts/**` and `tests/**` (so those
+directories get real type-checking, previously they got none) made `tsc -b` reach into
+already-committed `src/` files via relative imports and, under `nodenext`'s stricter
+module-resolution rules, flag them for missing explicit `.js` extensions on specifiers that
+are correct under `tsconfig.app.json`'s `bundler` resolution. Switching `tsconfig.node.json`
+to `esnext`/`bundler` (matching `tsconfig.app.json`) fixes this without editing any `src/`
+file; it only changes which import-specifier extension conventions `tsc` accepts, not
+whether it validates them — strictness flags are unchanged and type errors are still caught.
