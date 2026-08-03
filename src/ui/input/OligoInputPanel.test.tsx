@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { OligoInputPanel } from './OligoInputPanel';
@@ -147,5 +147,82 @@ describe('OligoInputPanel', () => {
     expect(useAppStore.getState().roles['oligo-1']).toBeUndefined();
     expect(screen.getByLabelText(/role for Oligo 2/i)).toHaveValue('');
     expect(screen.getByText(/choose a role/i)).toBeInTheDocument();
+  });
+
+  // Regression test (added post-review, invariant 4 -- shrink): deleting one
+  // of two identical bare lines leaves text that is byte-identical whichever
+  // line was removed, so nothing derived from the resulting text can say
+  // which entry survived. The survivor must therefore start with no role at
+  // all rather than silently inherit the one chosen for the entry that is
+  // now gone.
+  it('drops a manual role when a duplicate sequence loses an occurrence', async () => {
+    render(<OligoInputPanel />);
+    const textarea = screen.getByLabelText(/paste your oligos/i);
+    const user = userEvent.setup();
+
+    await user.click(textarea);
+    await user.paste('ACGTACGTACGTACGTACGT\nACGTACGTACGTACGTACGT');
+
+    const selectOne = await screen.findByLabelText(/role for Oligo 1/i);
+    await userEvent.selectOptions(selectOne, 'probe');
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(useAppStore.getState().roles['oligo-0']).toBe('probe');
+
+    // Delete the *first* of the two identical lines in a single edit.
+    fireEvent.change(textarea, { target: { value: 'ACGTACGTACGTACGTACGT' } });
+    expect(screen.queryByLabelText(/role for Oligo 2/i)).not.toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    // The survivor is not the entry the role was chosen for -- and cannot be
+    // proven to be either -- so it must have no role, and Continue must stay
+    // disabled until the user picks one.
+    expect(useAppStore.getState().roles['oligo-0']).toBeUndefined();
+    expect(screen.getByLabelText(/role for Oligo 1/i)).toHaveValue('');
+    expect(screen.getByText(/choose a role/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
+  });
+
+  // Regression test (added post-review, invariant 4 -- growth): inserting a
+  // new line whose sequence duplicates an existing one shifts every
+  // same-sequence occurrence rank after it, so cached roles would land on
+  // entries the user never chose them for. All roles cached for that
+  // sequence must be dropped; roles for sequences whose multiplicity did not
+  // change must survive, at whatever position they now occupy.
+  it('drops manual roles when a duplicate sequence gains an occurrence', async () => {
+    const dup = 'ACGTACGTACGTACGTACGT';
+    const other = 'TTTTTTTTTTTTTTTTTTTT';
+    render(<OligoInputPanel />);
+    const textarea = screen.getByLabelText(/paste your oligos/i);
+    const user = userEvent.setup();
+
+    await user.click(textarea);
+    await user.paste(`${dup}\n${other}\n${dup}`);
+
+    await userEvent.selectOptions(await screen.findByLabelText(/role for Oligo 1/i), 'forward');
+    await userEvent.selectOptions(screen.getByLabelText(/role for Oligo 2/i), 'probe');
+    await userEvent.selectOptions(screen.getByLabelText(/role for Oligo 3/i), 'reverse');
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(useAppStore.getState().roles).toEqual({
+      'oligo-0': 'forward',
+      'oligo-1': 'probe',
+      'oligo-2': 'reverse',
+    });
+
+    // Insert a *new* duplicate-sequence line at the top: the ranks of both
+    // entries the user chose roles for shift by one.
+    fireEvent.change(textarea, { target: { value: `${dup}\n${dup}\n${other}\n${dup}` } });
+    await screen.findByLabelText(/role for Oligo 4/i);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    // Every entry sharing the duplicated sequence -- the newcomer at the top
+    // included -- must have no role.
+    expect(useAppStore.getState().roles['oligo-0']).toBeUndefined();
+    expect(useAppStore.getState().roles['oligo-1']).toBeUndefined();
+    expect(useAppStore.getState().roles['oligo-3']).toBeUndefined();
+    // The untouched sequence kept its multiplicity, so its manual role
+    // survives -- reapplied at its new position.
+    expect(useAppStore.getState().roles['oligo-2']).toBe('probe');
+    expect(screen.getAllByText(/choose a role/i)).toHaveLength(3);
+    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
   });
 });
