@@ -166,9 +166,21 @@ function OligoBindingRow({
  *   ticks "Confirm this site", because a heavily wildcarded oligo can match
  *   plausibly in more than one place for reasons the resolver cannot rank.
  *
- * `Continue` stays disabled until every oligo has a chosen site *and* every
- * degenerate one has been confirmed, so no later step can run on a site the
- * user never agreed to.
+ * `Continue` stays disabled until every oligo has a *committed* site, so no
+ * later step can run on a site the user never agreed to.
+ *
+ * "Committed" is derived once, in `rows`, and is the only notion of agreement
+ * the rest of the component uses -- `Continue`, the geometry check and the map
+ * all read it rather than the store. That is not indirection for its own sake:
+ * the store's `chooseSite` is a merge with no removal action, so unticking a
+ * confirmation cannot take the site back out of `chosenSites`. Reading the raw
+ * store would leave a retracted site still drawn on the map and still counted
+ * in the geometry check while its checkbox showed unticked -- two renderings of
+ * one checkbox state, differing only by history, in the step whose whole
+ * purpose is telling the user what the tool believes. A stale entry does stay
+ * in the store; it is unreachable, because every path out of this step runs
+ * through `Continue`. Retracting it properly needs an action the store does not
+ * have.
  *
  * Resolution scans the whole reference twice per oligo (once per strand), so
  * it is memoised on the oligo list and the reference and never re-run for a
@@ -176,12 +188,15 @@ function OligoBindingRow({
  * store from an effect rather than during render, because later steps read
  * them from there.
  *
- * Confirmations are held locally, keyed by oligo id *and* sequence: the ids
- * from `parseOligoText` are positional (`oligo-0`), so a different oligo can
- * inherit the id of one the user already confirmed. Pairing the id with the
- * sequence makes the key change whenever the content does, and an identical
- * sequence at the same id resolves to exactly the same site, so reusing the
- * confirmation there is sound.
+ * Confirmations are held locally, keyed by oligo id, sequence *and the site
+ * they confirm*. The ids from `parseOligoText` are positional (`oligo-0`), so
+ * a different oligo can inherit the id of one the user already confirmed;
+ * adding the sequence closes that. Adding the site closes the rest: local
+ * state survives `setPathogen`, which resets the store, so id+sequence alone
+ * would show a ticked box for a site resolved against a different genome, and
+ * the only way out would be to untick and retick. Keying on the site makes the
+ * confirmation self-invalidate on an edit, on a pathogen change, and on any
+ * re-resolution.
  *
  * The geometry check runs only when a forward and a reverse site are both
  * chosen, and its problems are rendered as warnings. It never blocks
@@ -215,26 +230,44 @@ export function BindingResolution() {
     }
   }, [resolved, setResolution, chooseSite]);
 
-  const confirmKey = (oligo: OligoInput) => `${oligo.id} ${oligo.sequence}`;
-  const isConfirmed = (oligo: OligoInput) => confirmations[confirmKey(oligo)] === true;
+  // Keyed by the site it confirms, not just by the oligo: `setPathogen` resets
+  // the store but cannot clear this component's local state, so an id+sequence
+  // key would leave the box ticked for a site that was resolved against a
+  // different genome. Including the site makes the key self-invalidate on an
+  // edit, on a pathogen change, and on any re-resolution.
+  const confirmKey = (oligo: OligoInput, site: BindingSite) =>
+    `${oligo.id}\0${oligo.sequence}\0${siteKey(site)}`;
+  const isConfirmed = (oligo: OligoInput, site: BindingSite) =>
+    confirmations[confirmKey(oligo, site)] === true;
 
-  const handleConfirm = (oligo: OligoInput, resolution: Resolution, confirmed: boolean) => {
-    setConfirmations((current) => ({ ...current, [confirmKey(oligo)]: confirmed }));
-    const site = chosenSites[oligo.id] ?? resolution.chosen;
-    if (confirmed && site !== null && site !== undefined) chooseSite(oligo.id, site);
+  // The single definition of "the user has agreed to this site". `chooseSite`
+  // is a merge with no removal action, so the store cannot forget a retracted
+  // confirmation -- everything downstream (Continue, the geometry check, the
+  // map) reads `committed` rather than `chosenSites`, so unticking the box
+  // renders exactly like never having ticked it.
+  const rows = resolved.map(({ oligo, resolution }) => {
+    const stored = chosenSites[oligo.id];
+    const located = stored ?? resolution.chosen;
+    const confirmed = located !== null && isConfirmed(oligo, located);
+    const committed =
+      stored !== undefined && (resolution.status !== 'highly-degenerate' || confirmed)
+        ? stored
+        : null;
+    return { oligo, resolution, stored, located, confirmed, committed };
+  });
+
+  const handleConfirm = (oligo: OligoInput, located: BindingSite | null, confirmed: boolean) => {
+    if (located === null) return;
+    setConfirmations((current) => ({ ...current, [confirmKey(oligo, located)]: confirmed }));
+    // Unticking needs no store write: `committed` above already stops counting it.
+    if (confirmed) chooseSite(oligo.id, located);
   };
 
-  const canContinue =
-    resolved.length > 0 &&
-    resolved.every(
-      ({ oligo, resolution }) =>
-        chosenSites[oligo.id] !== undefined &&
-        (resolution.status !== 'highly-degenerate' || isConfirmed(oligo)),
-    );
+  const canContinue = rows.length > 0 && rows.every((row) => row.committed !== null);
 
   const siteForRole = (role: OligoRole): BindingSite | undefined => {
-    const match = oligos.find((oligo) => (roles[oligo.id] ?? oligo.role) === role);
-    return match === undefined ? undefined : chosenSites[match.id];
+    const match = rows.find((row) => (roles[row.oligo.id] ?? row.oligo.role) === role);
+    return match?.committed ?? undefined;
   };
   const forward = siteForRole('forward');
   const reverse = siteForRole('reverse');
@@ -245,21 +278,20 @@ export function BindingResolution() {
       ? checkAssayGeometry({ forward, reverse, probe })
       : null;
 
-  // One map per segment that actually carries a chosen site: influenza
+  // One map per segment that actually carries a committed site: influenza
   // references have eight segments, and empty bars for the other seven would
   // be noise.
   const sitesBySegment = new Map<string, GenomeMapSite[]>();
-  for (const oligo of oligos) {
-    const site = chosenSites[oligo.id];
-    if (site === undefined) continue;
+  for (const { oligo, committed } of rows) {
+    if (committed === null) continue;
     const entry: GenomeMapSite = {
       label: oligo.name,
-      start: site.start,
-      end: site.end,
-      strand: site.strand,
+      start: committed.start,
+      end: committed.end,
+      strand: committed.strand,
     };
-    const existing = sitesBySegment.get(site.segment);
-    if (existing === undefined) sitesBySegment.set(site.segment, [entry]);
+    const existing = sitesBySegment.get(committed.segment);
+    if (existing === undefined) sitesBySegment.set(committed.segment, [entry]);
     else existing.push(entry);
   }
   const segmentLength = (name: string) =>
@@ -278,16 +310,16 @@ export function BindingResolution() {
         <p className="text-sm text-slate-700">No oligos yet. Go back to step 1 and add some.</p>
       ) : (
         <ul aria-label="Binding sites" className="flex flex-col gap-3">
-          {resolved.map(({ oligo, resolution }) => (
+          {rows.map(({ oligo, resolution, stored, located, confirmed }) => (
             <OligoBindingRow
               key={oligo.id}
               oligo={oligo}
               role={roles[oligo.id] ?? oligo.role}
               resolution={resolution}
-              chosen={chosenSites[oligo.id]}
-              confirmed={isConfirmed(oligo)}
+              chosen={stored}
+              confirmed={confirmed}
               onChoose={(site) => chooseSite(oligo.id, site)}
-              onConfirm={(confirmed) => handleConfirm(oligo, resolution, confirmed)}
+              onConfirm={(isConfirmedNow) => handleConfirm(oligo, located, isConfirmedNow)}
             />
           ))}
         </ul>
