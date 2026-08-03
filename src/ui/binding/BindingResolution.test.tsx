@@ -179,6 +179,40 @@ describe('BindingResolution: retracted confirmations', () => {
   });
 });
 
+// Regression test (added post-review, finding 3): a confirmation is a
+// statement about a *site*, so it is keyed by the site and not just by the
+// oligo. The reviewed failure was cross-pathogen -- local state survives
+// `setPathogen`, which resets the store, so an id+sequence key left the box
+// ticked for a site resolved against a different genome. That exact path
+// cannot be tested with the sequences available here (the brief's degenerate
+// literal is a no-hit under both influenza references, so no checkbox renders
+// at all, and inventing one that lands in both genomes is exactly what Global
+// Constraint 2 forbids). The same key is exercised through the one
+// same-pathogen state where a single oligo can confirm two different sites:
+// degenerate *and* tied.
+describe('BindingResolution: confirmation identity', () => {
+  it('does not carry a confirmation over to a different candidate site', async () => {
+    // Composed at runtime from two of the brief's own literals -- a poly-T
+    // 16-mer and the wildcard tail of the degenerate fixture. Degeneracy 256
+    // with 18 equally good sites, so the resolver offers candidates *and*
+    // demands confirmation.
+    const composed = 'TTTTTTTTTTTTTTTTTTTT'.slice(0, 16) + 'TACATGTCTCTGGGACCANNNN'.slice(-4);
+    seed(composed);
+    render(<BindingResolution />);
+    const radios = await screen.findAllByRole('radio');
+
+    await userEvent.click(radios[0]!);
+    const confirm = screen.getByRole('checkbox', { name: /confirm this site/i });
+    await userEvent.click(confirm);
+    expect(confirm).toBeChecked();
+    expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled();
+
+    await userEvent.click(radios[1]!);
+    expect(screen.getByRole('checkbox', { name: /confirm this site/i })).not.toBeChecked();
+    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
+  });
+});
+
 // Regression test (added post-review, finding 1): the first version of these
 // components used a literal 0x00 byte as a template-literal key delimiter.
 // Runtime was unaffected, which is why nothing caught it -- but git sniffs the
