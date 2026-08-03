@@ -44,7 +44,14 @@ interface OligoBindingRowProps {
   oligo: OligoInput;
   role: OligoRole | null;
   resolution: Resolution;
-  /** The site committed to the store for this oligo, if any. */
+  /**
+   * The raw site currently in the store for this oligo, if any. This is what
+   * the row renders, which is deliberately *not* the same as "committed": an
+   * untick leaves the store entry in place (there is no unchoose action), so
+   * only the parent's derived `committed` view decides what counts. The user
+   * must still see the coordinates of the site they are being asked to
+   * confirm.
+   */
   chosen: BindingSite | undefined;
   confirmed: boolean;
   onChoose: (site: BindingSite) => void;
