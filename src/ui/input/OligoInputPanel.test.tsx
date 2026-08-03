@@ -225,4 +225,39 @@ describe('OligoInputPanel', () => {
     expect(screen.getAllByText(/choose a role/i)).toHaveLength(3);
     expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
   });
+
+  // Regression test (added post-review, invariant 4's boundary): a sequence
+  // that never has more than one occurrence carries no occurrence-rank
+  // ambiguity at all, so a *transient* disappearance -- a stray character
+  // making it fail IUPAC validation mid-typing, a cut-and-repaste -- must not
+  // cost the user the role they picked. Only multiplicities above one are
+  // ambiguous.
+  it('keeps a manual role when its sole occurrence goes briefly invalid', async () => {
+    render(<OligoInputPanel />);
+    const textarea = screen.getByLabelText(/paste your oligos/i);
+    const user = userEvent.setup();
+
+    await user.click(textarea);
+    await user.paste('ACGTACGTACGTACGTACGT');
+    await userEvent.selectOptions(await screen.findByLabelText(/role for Oligo 1/i), 'probe');
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(useAppStore.getState().roles['oligo-0']).toBe('probe');
+
+    // A stray character makes the sequence invalid: the entry leaves
+    // `oligos` entirely and is reported as a parse error instead.
+    fireEvent.change(textarea, { target: { value: 'ACGTACGTACGTACGTACGTX' } });
+    expect(screen.getByText(/not a valid iupac/i)).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(useAppStore.getState().oligos).toHaveLength(0);
+
+    // Deleting the stray character restores the identical, still-unique
+    // sequence -- there was never a second occurrence to confuse it with.
+    fireEvent.change(textarea, { target: { value: 'ACGTACGTACGTACGTACGT' } });
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    expect(useAppStore.getState().roles['oligo-0']).toBe('probe');
+    expect(screen.getByLabelText(/role for Oligo 1/i)).toHaveValue('probe');
+    expect(screen.queryByText(/choose a role/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled();
+  });
 });

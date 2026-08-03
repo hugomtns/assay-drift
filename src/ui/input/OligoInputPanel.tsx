@@ -46,10 +46,13 @@ const DEBOUNCE_MS = 200;
  * the ambiguity is genuine, not a keying oversight. Rather than guess, we
  * fail safe: `reconcileManualRoles` compares each parse's per-sequence
  * occurrence counts against the immediately previous parse's, and forgets
- * *every* remembered role for any sequence whose count changed. Losing a
- * role is loud and harmless (the entry shows "Choose a role" and
- * "Continue" stays disabled until the user re-picks); silently moving one
- * onto an oligo the user never chose it for is neither.
+ * *every* remembered role for any sequence whose count changed while more
+ * than one entry carried it on either side of the change. Losing a role is
+ * loud and harmless (the entry shows "Choose a role" and "Continue" stays
+ * disabled until the user re-picks); silently moving one onto an oligo the
+ * user never chose it for is neither. Counts moving only between 0 and 1
+ * are never ambiguous and never purge, so a role outlives its sequence
+ * going transiently invalid mid-typing.
  *
  * Reconciliation is cumulative -- it runs on every parse change, eagerly
  * in an effect declared *before* the debounced commit effect (effects run
@@ -83,10 +86,28 @@ function indexParse(oligos: ReadonlyArray<{ id: string; sequence: string }>): Pa
 }
 
 /**
- * Drops every remembered role for any sequence whose number of occurrences
- * changed since the previous parse -- their occurrence ranks now refer to
- * different entries than the ones the user chose those roles for. Mutates
- * `manualRoles` in place.
+ * Drops every remembered role for a sequence whose occurrence count became
+ * *ambiguous* since the previous parse -- that is, the count changed **and**
+ * more than one entry carried that sequence on at least one side of the
+ * change. Mutates `manualRoles` in place.
+ *
+ * The `> 1` half of the condition matters: occurrence rank is the only thing
+ * distinguishing same-sequence entries, and it only distinguishes anything
+ * once there are two of them. While a sequence's count stays at 0 or 1 there
+ * is nothing to confuse -- the sole rank that can be cached is 0 (caching a
+ * higher rank requires a parse with two or more occurrences, and every move
+ * away from such a count purges), and the only entry it can ever be applied
+ * to is the unique occurrence of that exact sequence. Purging on 1 -> 0 as
+ * well would throw a role away every time the user's typing makes a sequence
+ * transiently invalid (a stray character sends the entry to `errors`) or
+ * cuts and re-pastes a line, which is loss with nothing gained.
+ *
+ * Every genuinely ambiguous move still purges: 1 -> 2 (the new occurrence
+ * could have been inserted on either side of the old one), 2 -> 1 (deleting
+ * the first of two identical lines leaves text byte-identical to deleting
+ * the second), 2 -> 3, 2 -> 0, and so on. A count that reaches 2 by way of
+ * 1 -> 0 -> 2 purges on the second step, before two occurrences can exist to
+ * inherit a stale rank.
  */
 function reconcileManualRoles(
   manualRoles: Map<string, Map<number, OligoRole>>,
@@ -94,7 +115,9 @@ function reconcileManualRoles(
   currentCounts: ReadonlyMap<string, number>,
 ): void {
   for (const sequence of manualRoles.keys()) {
-    if ((previousCounts.get(sequence) ?? 0) !== (currentCounts.get(sequence) ?? 0)) {
+    const previous = previousCounts.get(sequence) ?? 0;
+    const current = currentCounts.get(sequence) ?? 0;
+    if (previous !== current && Math.max(previous, current) > 1) {
       manualRoles.delete(sequence);
     }
   }
