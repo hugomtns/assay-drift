@@ -8,6 +8,17 @@ import { useAppStore } from '../../state/store';
 const SELECT_ROWS = 8;
 
 /**
+ * Ids of the three message regions. Every one is *always* mounted with its
+ * text swapped in rather than being conditionally mounted, for two reasons: a
+ * live region that appears at the same instant as its text is frequently never
+ * announced, and `aria-describedby` must not point at an id that is absent
+ * from the document half the time.
+ */
+const DATE_RANGE_MESSAGE_ID = 'scope-date-range-message';
+const DATE_MISSING_MESSAGE_ID = 'scope-date-missing-message';
+const OPTIONS_MESSAGE_ID = 'scope-options-message';
+
+/**
  * The outcome of one option-list load, stamped with the pathogen it describes.
  * The stamp is what makes the lists reset on a pathogen change *during render*
  * rather than from a setState inside the effect body: a result whose
@@ -24,6 +35,13 @@ interface OptionLists {
 }
 
 /**
+ * Explicit 'en' collation. `localeCompare` with no locale sorts by the host's
+ * default, so option order would depend on the machine the app happens to run
+ * on the moment a name carries a diacritic -- Aaland/Aland, Cote/Cote d'Ivoire.
+ */
+const sorted = (values: string[]): string[] => [...values].sort((a, b) => a.localeCompare(b, 'en'));
+
+/**
  * The distinct, sorted, non-empty string values of one metadata field across
  * an aggregated response. `AggregatedRow`'s index signature is
  * `string | number | null`, and LAPIS returns `null` for sequences with no
@@ -36,7 +54,30 @@ function optionValues(rows: AggregatedRow[], field: string): string[] {
     const value = row[field];
     if (typeof value === 'string' && value !== '') seen.add(value);
   }
-  return [...seen].sort((a, b) => a.localeCompare(b));
+  return sorted([...seen]);
+}
+
+/**
+ * The options actually rendered: everything the load returned, plus any value
+ * already selected that the list does not contain.
+ *
+ * Without this, a selection can be filtering the analysis while being
+ * invisible. The selection lives in the store; the options that give it
+ * something to sit in live in this component's `useState`. So a remount (step
+ * back, step forward -- fresh state, nothing loaded yet) or a failed load
+ * leaves `<select value={['Germany']}>` with no children: an empty listbox,
+ * under a hint reading "Leave empty to include all countries", while
+ * `scopeToFilters` narrows the query to Germany regardless. The UI would be
+ * asserting the analysis is unfiltered at the exact moment it is filtered, and
+ * failing silently while it did.
+ *
+ * Merging rather than clearing the selection is the right direction: the
+ * selection is the user's stated intent, and an option list that has not
+ * arrived is no evidence against it.
+ */
+function withSelected(options: string[], selected: string[]): string[] {
+  const missing = selected.filter((value) => !options.includes(value));
+  return missing.length === 0 ? options : sorted([...options, ...missing]);
 }
 
 interface ScopeControlsProps {
@@ -49,6 +90,13 @@ interface ScopeControlsProps {
    * would make every render of this component (including every unit test that
    * does not pass one) hit the network. The wizard supplies the cached
    * transport when it mounts this step.
+   *
+   * **It must be referentially stable.** It is an effect dependency, so a
+   * transport constructed inline in the caller's render --
+   * `<ScopeControls transport={withCache(makeFetchTransport())} />` -- is a new
+   * object every render and makes this component fire, then abort, two
+   * requests per render, forever, never settling. Build it once (a module
+   * constant, `useMemo`, or a ref) and pass the same instance.
    */
   transport?: LapisTransport | undefined;
 }
@@ -86,12 +134,26 @@ interface ScopeControlsProps {
  * a second thing to invalidate.
  *
  * The load is abortable (Global Constraint 9). The effect's cleanup aborts the
- * controller and flips `live`, so both unmount and a pathogen change cancel
- * the request in flight, and neither the success nor the failure path can set
- * state afterwards. A failed load is not an error state for the step: the
- * selects stay mounted and usable, the step still runs, and the notice says so
- * -- an empty filter already means "all", so an unavailable list costs the user
- * the ability to narrow, not the ability to proceed.
+ * controller and flips `live`, so unmount, a pathogen change and a transport
+ * swap all cancel the request in flight, and neither the success nor the
+ * failure path can set state afterwards.
+ *
+ * `live` and the pathogen stamp look redundant but are not, and the difference
+ * is worth stating because it was originally got wrong here. The stamp covers
+ * a pathogen change: an aborted run's `.catch` closes over the *old* `cfg`, so
+ * its result is stamped with the old pathogen and discarded at render. It does
+ * nothing at all when `transport` changes while the pathogen stays put -- the
+ * aborted run then stamps the *current* pathogen, the stamp check passes, and
+ * without `live` a spurious "could not be loaded" is painted over a reload
+ * that is still in flight. That is the path `live` exists for, and the only
+ * one that fails when it is removed.
+ *
+ * A failed load is not an error state for the step: the selects stay mounted
+ * and usable and the step still runs, because an unavailable list costs the
+ * user the ability to narrow, not the ability to proceed. The notice says so
+ * -- but only when it is true. If filters are already selected, they are still
+ * being applied, so the notice names them instead of claiming everything is
+ * included.
  */
 export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
   const pathogenId = useAppStore((s) => s.pathogenId);
@@ -137,21 +199,65 @@ export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
   // A result for a different pathogen is stale by construction, so it is
   // discarded here rather than cleared by a setState in the effect above.
   const options = loaded !== null && loaded.pathogenId === pathogenId ? loaded : null;
-  const countryOptions = options?.countries ?? [];
-  const lineageOptions = options?.lineages ?? [];
+  // Merged with the current selection so a filter can never be applied without
+  // being on screen. See `withSelected`.
+  const countryOptions = withSelected(options?.countries ?? [], scope.countries);
+  const lineageOptions = withSelected(options?.lineages ?? [], scope.lineages);
   // No transport means no load was ever started, which renders identically to
   // a load that returned nothing -- not as a stuck spinner.
   const loading = transport !== undefined && options === null;
   const failed = options?.failed === true;
 
-  const missingDate = scope.dateFrom === '' || scope.dateTo === '';
+  const fromMissing = scope.dateFrom === '';
+  const toMissing = scope.dateTo === '';
+  const missingDate = fromMissing || toMissing;
   const inverted = !missingDate && scope.dateTo < scope.dateFrom;
   const canRun = !missingDate && !inverted;
+
+  // Each date field points at the message that is about *it*: an empty field
+  // gets the missing-date message, and both fields get the range message,
+  // because an inverted range is a property of the pair and either end is a
+  // legitimate place to fix it.
+  const describedBy = (isMissing: boolean): string | undefined => {
+    const ids: string[] = [];
+    if (isMissing) ids.push(DATE_MISSING_MESSAGE_ID);
+    if (inverted) ids.push(DATE_RANGE_MESSAGE_ID);
+    return ids.length > 0 ? ids.join(' ') : undefined;
+  };
+  // `disabled` (rather than `aria-disabled`) keeps the button unactivatable,
+  // which is what a "run the analysis" action wants -- but it also takes the
+  // button out of the tab order, so the reason has to travel with it as a
+  // description instead of waiting to be discovered on focus. Switching to
+  // `aria-disabled` would keep it reachable, and is the better long-term
+  // answer, but jest-dom's `toBeDisabled()` does not consider `aria-disabled`,
+  // so it would fail the brief's third test -- which is not mine to loosen.
+  // Flagged for Task 6.2, which owns accessibility properly.
+  const blockingMessageId = missingDate
+    ? DATE_MISSING_MESSAGE_ID
+    : inverted
+      ? DATE_RANGE_MESSAGE_ID
+      : undefined;
 
   const selectedValues = (event: ChangeEvent<HTMLSelectElement>): string[] =>
     Array.from(event.target.selectedOptions, (option) => option.value);
 
   const lineagePlural = `${cfg.lineageLabel}s`;
+
+  // `cfg.lineageLabel` is used verbatim, never lower-cased: "HA clade" is an
+  // acronym plus a word, and `toLowerCase()` turned it into "ha clade".
+  const listNames = `country and ${cfg.lineageLabel}`;
+  const retained = [...scope.countries, ...scope.lineages];
+  let optionsMessage = '';
+  if (loading) {
+    optionsMessage = `Loading the ${listNames} lists. You can carry on without them.`;
+  } else if (failed && retained.length > 0) {
+    // Naming them matters: the lists are gone, so the only other place these
+    // filters appear on screen is the selects, and telling the user everything
+    // is included would be false while they are still applied.
+    optionsMessage = `The ${listNames} lists could not be loaded. Your filters are still being applied: ${retained.join(', ')}.`;
+  } else if (failed) {
+    optionsMessage = `The ${listNames} lists could not be loaded. Leaving both empty analyses everything, so you can still continue.`;
+  }
 
   return (
     <section aria-labelledby="scope-controls-heading" className="flex flex-col gap-4">
@@ -172,6 +278,8 @@ export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
             type="date"
             value={scope.dateFrom}
             onChange={(e) => setScope({ dateFrom: e.target.value })}
+            aria-invalid={fromMissing || inverted}
+            aria-describedby={describedBy(fromMissing)}
             className="rounded border border-slate-300 px-2 py-1"
           />
         </div>
@@ -185,21 +293,34 @@ export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
             type="date"
             value={scope.dateTo}
             onChange={(e) => setScope({ dateTo: e.target.value })}
+            aria-invalid={toMissing || inverted}
+            aria-describedby={describedBy(toMissing)}
             className="rounded border border-slate-300 px-2 py-1"
           />
         </div>
       </div>
 
-      {inverted && (
-        <p role="alert" className="rounded bg-red-50 p-2 text-sm text-red-900">
-          End date must be on or after the start date.
-        </p>
-      )}
-      {missingDate && (
-        <p role="alert" className="rounded bg-red-50 p-2 text-sm text-red-900">
-          Enter both a start and an end collection date.
-        </p>
-      )}
+      {/*
+        Both regions are always mounted and have their text swapped in; see the
+        id constants. An inverted range is assertive -- the user has stated a
+        range that cannot mean anything. A missing date is not: clearing a field
+        to retype it is the normal way to edit a date, and `role="alert"` there
+        interrupts on every routine edit.
+      */}
+      <p
+        id={DATE_RANGE_MESSAGE_ID}
+        role="alert"
+        className={inverted ? 'rounded bg-red-50 p-2 text-sm text-red-900' : undefined}
+      >
+        {inverted ? 'End date must be on or after the start date.' : ''}
+      </p>
+      <p
+        id={DATE_MISSING_MESSAGE_ID}
+        role="status"
+        className={missingDate ? 'rounded bg-amber-50 p-2 text-sm text-amber-900' : undefined}
+      >
+        {missingDate ? 'Enter both a start and an end collection date.' : ''}
+      </p>
 
       <div className="flex flex-wrap gap-4">
         <div className="flex flex-col gap-1">
@@ -222,7 +343,8 @@ export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
             ))}
           </select>
           <p id="scope-countries-hint" className="text-xs text-slate-600">
-            Leave empty to include all countries.
+            Leave empty to include all countries. This list covers the whole dataset, not just your
+            date range.
           </p>
         </div>
 
@@ -246,26 +368,25 @@ export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
             ))}
           </select>
           <p id="scope-lineages-hint" className="text-xs text-slate-600">
-            {`Leave empty to include all ${lineagePlural}.`}
+            {`Leave empty to include all ${lineagePlural}. This list covers the whole dataset, not just your date range.`}
           </p>
         </div>
       </div>
 
-      {loading && (
-        <p role="status" className="text-xs text-slate-600">
-          {`Loading the country and ${cfg.lineageLabel.toLowerCase()} lists. You can carry on without them.`}
-        </p>
-      )}
-      {failed && (
-        <p role="status" className="text-xs text-slate-600">
-          {`The country and ${cfg.lineageLabel.toLowerCase()} lists could not be loaded. Leaving both empty analyses everything, so you can still continue.`}
-        </p>
-      )}
+      {/*
+        Always mounted, text swapped in. A `role="status"` node inserted at the
+        same moment as its text is frequently never announced -- the live region
+        has to exist before the content arrives for the announcement to fire.
+      */}
+      <p id={OPTIONS_MESSAGE_ID} role="status" className="text-xs text-slate-600">
+        {optionsMessage}
+      </p>
 
       <button
         type="button"
         onClick={onRun}
         disabled={!canRun}
+        aria-describedby={blockingMessageId}
         className="self-start rounded bg-slate-900 px-4 py-2 text-white disabled:bg-slate-300"
       >
         Run analysis
