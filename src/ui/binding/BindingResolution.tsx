@@ -217,6 +217,8 @@ export function BindingResolution() {
   const chosenSites = useAppStore((s) => s.chosenSites);
   const setResolution = useAppStore((s) => s.setResolution);
   const chooseSite = useAppStore((s) => s.chooseSite);
+  const commitSites = useAppStore((s) => s.commitSites);
+  const goTo = useAppStore((s) => s.goTo);
   const [confirmations, setConfirmations] = useState<Record<string, boolean>>({});
 
   const pathogen = getPathogen(pathogenId);
@@ -271,6 +273,26 @@ export function BindingResolution() {
   };
 
   const canContinue = rows.length > 0 && rows.every((row) => row.committed !== null);
+
+  /**
+   * The one write that makes the store agree with the screen.
+   *
+   * Up to this point `chosenSites` is a superset of what the user agreed to:
+   * `chooseSite` merges and there is no unchoose, so a confirmation the user
+   * ticked and then retracted is still in there, as is anything left by an
+   * oligo list that has since changed. Everything downstream of this step
+   * reads the store rather than `committed`, so leaving the step replaces the
+   * map wholesale with exactly the committed set. `canContinue` guarantees
+   * every current row is in it.
+   */
+  const handleContinue = () => {
+    const committed: Record<string, BindingSite> = {};
+    for (const row of rows) {
+      if (row.committed !== null) committed[row.oligo.id] = row.committed;
+    }
+    commitSites(committed);
+    goTo('scope');
+  };
 
   const siteForRole = (role: OligoRole): BindingSite | undefined => {
     const match = rows.find((row) => (roles[row.oligo.id] ?? row.oligo.role) === role);
@@ -376,6 +398,7 @@ export function BindingResolution() {
       <button
         type="button"
         disabled={!canContinue}
+        onClick={handleContinue}
         className="self-start rounded bg-slate-900 px-4 py-2 text-white disabled:bg-slate-300"
       >
         Continue

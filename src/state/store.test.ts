@@ -36,6 +36,39 @@ describe('app store', () => {
     expect(s().roles['o1']).toBe('probe');
   });
 
+  // `chooseSite` is a merge with no removal action, so a site the user picked
+  // and then retracted stays in `chosenSites` forever. `commitSites` is the
+  // one write that can shrink the map: it replaces it wholesale with exactly
+  // the set the user confirmed, which is what the analysis assembly reads.
+  it('replaces rather than merges chosenSites on commitSites', () => {
+    const s = () => useAppStore.getState();
+    const site = (start: number, end: number) => ({
+      segment: 'main', strand: 'plus' as const, start, end, mismatches: 0, mismatchOligoIndexes: [],
+    });
+    s().setOligos([
+      { id: 'o1', name: 'x', role: 'forward', sequence: 'ACGTACGTACGTACGT' },
+      { id: 'o2', name: 'y', role: 'reverse', sequence: 'TTTTACGTACGTACGT' },
+    ]);
+    s().chooseSite('o1', site(1, 16));
+    s().chooseSite('o2', site(101, 116));
+    expect(Object.keys(s().chosenSites).sort()).toEqual(['o1', 'o2']);
+
+    s().commitSites({ o2: site(101, 116) });
+
+    expect(Object.keys(s().chosenSites)).toEqual(['o2']);
+    expect(s().chosenSites['o1']).toBeUndefined();
+    expect(s().chosenSites['o2']).toMatchObject({ start: 101, end: 116 });
+  });
+
+  it('clears chosenSites entirely when commitSites is given nothing', () => {
+    const s = () => useAppStore.getState();
+    s().chooseSite('o1', {
+      segment: 'main', strand: 'plus', start: 1, end: 16, mismatches: 0, mismatchOligoIndexes: [],
+    });
+    s().commitSites({});
+    expect(s().chosenSites).toEqual({});
+  });
+
   it('moves through the analysis lifecycle', () => {
     const s = () => useAppStore.getState();
     s().startAnalysis();

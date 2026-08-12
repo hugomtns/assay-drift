@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parseOligoText, type OligoRole } from '../../core/oligo-input';
 import { useAppStore } from '../../state/store';
 import { RoleSelector } from './RoleSelector';
@@ -128,6 +128,7 @@ export function OligoInputPanel() {
   const roles = useAppStore((s) => s.roles);
   const setOligos = useAppStore((s) => s.setOligos);
   const setRole = useAppStore((s) => s.setRole);
+  const goTo = useAppStore((s) => s.goTo);
   /** Roles the user picked explicitly: sequence -> occurrence rank -> role. */
   const manualRolesRef = useRef<Map<string, Map<number, OligoRole>>>(new Map());
   /** Per-sequence occurrence counts of the last parse we reconciled against. */
@@ -144,18 +145,35 @@ export function OligoInputPanel() {
     previousCountsRef.current = countsBySequence;
   }, [countsBySequence]);
 
+  /**
+   * Writes the parse currently on screen into the store. Idempotent for a
+   * given parse, so running it early (from `handleContinue`) and then again
+   * from a later debounce would produce the same store -- but see `flush`,
+   * which cancels the pending timer so it does not run twice at all.
+   */
+  const commit = useCallback(() => {
+    setOligos(parsed.oligos);
+    for (const oligo of parsed.oligos) {
+      const key = keysByOligoId.get(oligo.id);
+      if (key === undefined) continue;
+      const manualRole = manualRolesRef.current.get(key.sequence)?.get(key.occurrence);
+      if (manualRole !== undefined) setRole(oligo.id, manualRole);
+    }
+  }, [parsed, keysByOligoId, setOligos, setRole]);
+
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     const timer = setTimeout(() => {
-      setOligos(parsed.oligos);
-      for (const oligo of parsed.oligos) {
-        const key = keysByOligoId.get(oligo.id);
-        if (key === undefined) continue;
-        const manualRole = manualRolesRef.current.get(key.sequence)?.get(key.occurrence);
-        if (manualRole !== undefined) setRole(oligo.id, manualRole);
-      }
+      timerRef.current = null;
+      commit();
     }, DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [parsed, keysByOligoId, setOligos, setRole]);
+    timerRef.current = timer;
+    return () => {
+      clearTimeout(timer);
+      if (timerRef.current === timer) timerRef.current = null;
+    };
+  }, [commit]);
 
   const handleRoleChange = (oligoId: string, role: OligoRole) => {
     const key = keysByOligoId.get(oligoId);
@@ -174,6 +192,29 @@ export function OligoInputPanel() {
   const canContinue =
     parsed.oligos.length > 0 &&
     parsed.oligos.every((oligo) => effectiveRole(oligo.id, oligo.role) !== undefined);
+
+  /**
+   * Leaving this step is the first moment anything reads `oligos` and `roles`
+   * for real, and for up to DEBOUNCE_MS after the last keystroke they still
+   * describe the *previous* parse. A user who pastes and immediately clicks
+   * Continue would otherwise resolve binding sites for oligos that are no
+   * longer on screen -- a complete, plausible, wrong answer.
+   *
+   * So the pending commit is flushed synchronously and its timer cancelled
+   * before we navigate. Shortening the debounce would only narrow the window;
+   * only writing before the read closes it. Cancelling matters as much as
+   * flushing: a timer that survives the navigation would call `setOligos`
+   * again from step 2, and `setOligos` clears `chosenSites` -- silently
+   * emptying the sites step 2 had just resolved.
+   */
+  const handleContinue = () => {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    commit();
+    goTo('binding');
+  };
 
   return (
     <section aria-labelledby="oligo-input-heading">
@@ -209,7 +250,7 @@ export function OligoInputPanel() {
         })}
       </ul>
 
-      <button type="button" disabled={!canContinue}>
+      <button type="button" disabled={!canContinue} onClick={handleContinue}>
         Continue
       </button>
     </section>

@@ -42,6 +42,19 @@ interface AppState {
   setRole(oligoId: string, role: OligoRole): void;
   setResolution(oligoId: string, resolution: Resolution): void;
   chooseSite(oligoId: string, site: BindingSite): void;
+  /**
+   * Replaces `chosenSites` wholesale with exactly the sites the user has
+   * agreed to.
+   *
+   * `chooseSite` is a merge and there is no unchoose, so a site the user
+   * picked and then retracted (by unticking a degenerate oligo's
+   * confirmation) stays in the map. `BindingResolution` therefore derives its
+   * own `committed` view and renders from that -- but the store itself stays
+   * a superset until this write lands. Everything downstream of step 2 reads
+   * `chosenSites`, so step 2's Continue calls this with its committed set and
+   * the store afterwards holds precisely that, and nothing else.
+   */
+  commitSites(sites: Record<string, BindingSite>): void;
   setScope(partial: Partial<Scope>): void;
   goTo(step: Step): void;
   startAnalysis(): void;
@@ -83,6 +96,8 @@ export const useAppStore = create<AppState>((set) => ({
   setResolution: (oligoId, resolution) =>
     set((s) => ({ resolutions: { ...s.resolutions, [oligoId]: resolution } })),
   chooseSite: (oligoId, site) => set((s) => ({ chosenSites: { ...s.chosenSites, [oligoId]: site } })),
+  // Deliberately not a merge. See the interface comment.
+  commitSites: (sites) => set(() => ({ chosenSites: { ...sites } })),
   setScope: (partial) => set((s) => ({ scope: { ...s.scope, ...partial }, result: null })),
   goTo: (step) => set(() => ({ step })),
   startAnalysis: () => set(() => ({ status: 'loading', error: null })),

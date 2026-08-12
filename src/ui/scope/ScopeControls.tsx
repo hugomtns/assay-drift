@@ -19,15 +19,39 @@ const DATE_MISSING_MESSAGE_ID = 'scope-date-missing-message';
 const OPTIONS_MESSAGE_ID = 'scope-options-message';
 
 /**
- * The outcome of one option-list load, stamped with the pathogen it describes.
- * The stamp is what makes the lists reset on a pathogen change *during render*
- * rather than from a setState inside the effect body: a result whose
- * `pathogenId` is not the current one is simply not read, so there is never a
- * frame in which H5N1's clades are offered under the SARS-CoV-2 label, and no
- * cascading render is needed to clear them.
+ * The outcome of one option-list load, stamped with the *inputs that produced
+ * it* -- the pathogen and the transport, which together are the effect's whole
+ * dependency list. The stamps are what make the lists reset *during render*
+ * rather than from a setState inside the effect body: a result whose stamps are
+ * not the current ones is simply not read, so there is never a frame in which
+ * H5N1's clades are offered under the SARS-CoV-2 label, and no cascading render
+ * is needed to clear them. (A setState in the effect body would also be a
+ * `react-hooks/set-state-in-effect` lint error, so this is the sanctioned shape
+ * as well as the cheaper one.)
+ *
+ * Both stamps are load-bearing and neither subsumes the other, because each
+ * covers the change the other cannot see:
+ *
+ * - A pathogen change re-runs the effect with the *same* transport, so only the
+ *   `pathogenId` stamp discards the previous lists.
+ * - A transport swap re-runs it under the *same* pathogen, so only the
+ *   `transport` stamp does. Without it the previous run's lists stay on screen,
+ *   stamped with a pathogen that still matches, presented as current while the
+ *   replacement query is in flight -- and `loading` (below) is false at the same
+ *   time, so nothing on screen says otherwise.
+ *
+ * Together they hold the invariant the `loading` derivation depends on: a query
+ * being in flight and a loaded list being on screen cannot both be true.
  */
 interface OptionLists {
   pathogenId: PathogenId;
+  /**
+   * Identity comparison only -- never called. The prop is required to be
+   * referentially stable (see `ScopeControlsProps`), which is what makes this a
+   * usable stamp: a caller that rebuilds its transport every render already
+   * re-queries every render, and would now also show the loading state forever.
+   */
+  transport: LapisTransport;
   countries: string[];
   lineages: string[];
   /** The load finished but failed. Distinct from "still loading" (`null`). */
@@ -138,15 +162,16 @@ interface ScopeControlsProps {
  * swap all cancel the request in flight, and neither the success nor the
  * failure path can set state afterwards.
  *
- * `live` and the pathogen stamp look redundant but are not, and the difference
- * is worth stating because it was originally got wrong here. The stamp covers
- * a pathogen change: an aborted run's `.catch` closes over the *old* `cfg`, so
- * its result is stamped with the old pathogen and discarded at render. It does
- * nothing at all when `transport` changes while the pathogen stays put -- the
- * aborted run then stamps the *current* pathogen, the stamp check passes, and
- * without `live` a spurious "could not be loaded" is painted over a reload
- * that is still in flight. That is the path `live` exists for, and the only
- * one that fails when it is removed.
+ * `live` and the stamps look redundant but are not, and the difference is worth
+ * stating because it was originally got wrong here. An aborted run's `.catch`
+ * closes over the `cfg` and `transport` it was started with, so its result is
+ * stamped with those and discarded at render for as long as either of them has
+ * moved on. What the stamps cannot catch is inputs that come *back*: pathogen
+ * A -> B -> A, or transport T1 -> T2 -> T1. The first run's abort then rejects
+ * with a result stamped exactly as the current render, both stamps pass, and
+ * without `live` a spurious "could not be loaded" is painted over a reload that
+ * is still in flight. That is the path `live` exists for, and it is also what
+ * keeps an unmounted component from being written to at all.
  *
  * A failed load is not an error state for the step: the selects stay mounted
  * and usable and the step still runs, because an unavailable list costs the
@@ -177,6 +202,7 @@ export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
         if (!live) return;
         setLoaded({
           pathogenId: cfg.id,
+          transport,
           countries: optionValues(countries.data, cfg.countryField),
           lineages: optionValues(lineages.data, cfg.lineageField),
           failed: false,
@@ -187,7 +213,7 @@ export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
         // already false in that case, so an aborted load never reports itself
         // as a failure and never writes over the run that replaced it.
         if (!live) return;
-        setLoaded({ pathogenId: cfg.id, countries: [], lineages: [], failed: true });
+        setLoaded({ pathogenId: cfg.id, transport, countries: [], lineages: [], failed: true });
       });
 
     return () => {
@@ -196,9 +222,13 @@ export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
     };
   }, [transport, cfg]);
 
-  // A result for a different pathogen is stale by construction, so it is
-  // discarded here rather than cleared by a setState in the effect above.
-  const options = loaded !== null && loaded.pathogenId === pathogenId ? loaded : null;
+  // A result produced by a different pathogen or a different transport is stale
+  // by construction, so it is discarded here rather than cleared by a setState
+  // in the effect above. Both stamps are needed; see `OptionLists`.
+  const options =
+    loaded !== null && loaded.pathogenId === pathogenId && loaded.transport === transport
+      ? loaded
+      : null;
   // Merged with the current selection so a filter can never be applied without
   // being on screen. See `withSelected`.
   const countryOptions = withSelected(options?.countries ?? [], scope.countries);

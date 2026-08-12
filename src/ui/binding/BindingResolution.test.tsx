@@ -179,6 +179,72 @@ describe('BindingResolution: retracted confirmations', () => {
   });
 });
 
+// Forward-pointer B (Task 4.3 -> 4.7). Everything on screen reads the derived
+// `committed` view, but Task 4.7 is the first consumer to read `chosenSites`
+// itself -- and `chooseSite` is a merge with no removal, so the store is a
+// superset of what the user actually confirmed. Leaving this step must write
+// exactly the committed set, so the analysis assembly downstream cannot pick
+// up a site the user retracted or one left behind by an oligo that is no
+// longer in the list.
+describe('BindingResolution: what leaving the step writes to the store', () => {
+  it('replaces chosenSites with exactly the committed set when Continue is clicked', async () => {
+    seedAll([
+      { id: 'oligo-0', name: 'F', role: 'forward', sequence: 'TACATGTCTCTGGGACCAATGG' },
+      { id: 'oligo-1', name: 'P', role: 'probe', sequence: 'TACATGTCTCTGGGACCANNNN' },
+    ]);
+    // A site for an oligo that is not in the list at all. `chooseSite` is the
+    // only way in and there is no way out, so this is a shape the store can
+    // genuinely hold; it is seeded rather than clicked because the UI has no
+    // path to it (see the disabled-Continue test below).
+    useAppStore.getState().chooseSite('oligo-9', {
+      segment: 'main', strand: 'plus', start: 1, end: 22, mismatches: 0, mismatchOligoIndexes: [],
+    });
+
+    render(<BindingResolution />);
+    const confirm = await screen.findByRole('checkbox', { name: /confirm this site/i });
+
+    await userEvent.click(confirm);
+    await userEvent.click(confirm);
+    // The retraction the store cannot express on its own: unticking leaves the
+    // site behind, which is precisely why Continue has to write the whole map.
+    expect(useAppStore.getState().chosenSites['oligo-1']).toBeDefined();
+    await userEvent.click(confirm);
+
+    await userEvent.click(screen.getByRole('button', { name: /continue/i }));
+
+    expect(Object.keys(useAppStore.getState().chosenSites).sort()).toEqual([
+      'oligo-0',
+      'oligo-1',
+    ]);
+    expect(useAppStore.getState().chosenSites['oligo-9']).toBeUndefined();
+    expect(useAppStore.getState().step).toBe('scope');
+  });
+
+  it('will not let a retracted confirmation reach Continue at all', async () => {
+    // The other half of the guarantee, and the reason the brief's "untick one,
+    // then click Continue" cannot be driven literally: `canContinue` requires
+    // *every* row to be committed, so a retracted confirmation disables the
+    // button rather than being carried past it. Both defences are needed --
+    // this one stops the user walking forward, `commitSites` stops the store
+    // remembering something the user took back.
+    seedAll([
+      { id: 'oligo-0', name: 'F', role: 'forward', sequence: 'TACATGTCTCTGGGACCAATGG' },
+      { id: 'oligo-1', name: 'P', role: 'probe', sequence: 'TACATGTCTCTGGGACCANNNN' },
+    ]);
+    render(<BindingResolution />);
+    const confirm = await screen.findByRole('checkbox', { name: /confirm this site/i });
+
+    await userEvent.click(confirm);
+    expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled();
+
+    await userEvent.click(confirm);
+    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
+    // The store still holds the retracted site; nothing on screen counts it.
+    expect(useAppStore.getState().chosenSites['oligo-1']).toBeDefined();
+    expect(useAppStore.getState().step).toBe('input');
+  });
+});
+
 // Regression test (added post-review, finding 3): a confirmation is a
 // statement about a *site*, so it is keyed by the site and not just by the
 // oligo. The reviewed failure was cross-pathogen -- local state survives

@@ -98,6 +98,28 @@ const pendingTransport = () => {
   return { transport, signals };
 };
 
+/**
+ * Never settles on its own, and does not reject on abort either. Every query
+ * instead hands the test a `fail()` to fire whenever it likes, so one run's
+ * rejection can be made to land *after* a later run's. `pendingTransport`
+ * cannot express that -- it rejects inside its abort listener, so its
+ * rejections are always in abort order, and an earlier run's result can never
+ * be the last one written.
+ */
+const controlledTransport = () => {
+  const failures: (() => void)[] = [];
+  const transport: LapisTransport = {
+    query<T>(): Promise<LapisResponse<T>> {
+      return new Promise<LapisResponse<T>>((_resolve, reject) => {
+        failures.push(() => {
+          reject(new DOMException('The operation was aborted.', 'AbortError'));
+        });
+      });
+    },
+  };
+  return { transport, failures };
+};
+
 const failingTransport = (): LapisTransport => ({
   async query<T>(): Promise<LapisResponse<T>> {
     throw new Error('LAPIS unavailable');
@@ -180,12 +202,17 @@ describe('ScopeControls option lists', () => {
   });
 
   it('does not report a failure when a transport swap aborts the previous load', async () => {
-    // The one path the pathogen stamp cannot cover, and therefore the only
-    // real guard on the `live` flag: `transport` changes while `pathogenId`
-    // stays put. The aborted run's `.catch` then stamps the *current*
-    // pathogen, the stamp check passes, and without `live` a spurious "could
-    // not be loaded" is painted over a reload that is still in flight.
-    // Task 4.7 swapping a transport is exactly how this arises.
+    // `transport` changes while `pathogenId` stays put, which the pathogen
+    // stamp cannot see. Task 4.7 swapping a transport is exactly how this
+    // arises.
+    //
+    // This comment used to claim this was "the only real guard on the `live`
+    // flag". That stopped being true when forward-pointer D added the transport
+    // stamp: the aborted run's `.catch` closes over the *old* transport, so its
+    // result is now discarded at render whether or not `live` guards it. The
+    // ping-pong test below is what holds `live` up now -- and the reason the
+    // claim needed rewriting rather than deleting is that it is exactly the
+    // kind of comment that gets trusted into a removal.
     const first = pendingTransport();
     const second = pendingTransport();
     const { rerender } = render(<ScopeControls onRun={vi.fn()} transport={first.transport} />);
@@ -203,6 +230,64 @@ describe('ScopeControls option lists', () => {
     expect(second.signals.map((s) => s.aborted)).toEqual([false, false]);
     expect(useAppStore.getState().pathogenId).toBe('sars-cov-2');
     expect(screen.queryByText(/could not be loaded/i)).not.toBeInTheDocument();
+  });
+
+  it('does not report a failure from an aborted run whose pathogen has come back', async () => {
+    // The path neither stamp can cover, and so the one thing `live` is now the
+    // only guard on. The stamps discard an aborted run's result for as long as
+    // its inputs have moved on; they cannot help once the inputs come *back*.
+    //
+    // Pathogen A -> B -> A, with run 1 (A) and run 2 (B) both aborted and run 3
+    // (A) in flight. Order matters: run 1's rejection has to land last, because
+    // it is the only one stamped with what is current again. Without `live`,
+    // that write survives the stamp check and paints "could not be loaded" over
+    // a reload that has not finished.
+    const { transport, failures } = controlledTransport();
+    render(<ScopeControls onRun={vi.fn()} transport={transport} />);
+
+    await act(async () => {
+      useAppStore.getState().setPathogen('h5n1');
+    });
+    await act(async () => {
+      useAppStore.getState().setPathogen('sars-cov-2');
+    });
+    // Two queries per run, three runs. 4 and 5 belong to the run still in
+    // flight and are never fired.
+    expect(failures).toHaveLength(6);
+
+    await act(async () => {
+      failures[2]?.();
+    });
+    await act(async () => {
+      failures[0]?.();
+    });
+
+    expect(useAppStore.getState().pathogenId).toBe('sars-cov-2');
+    expect(screen.queryByText(/could not be loaded/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/loading the country and Pango lineage lists/i)).toBeInTheDocument();
+  });
+
+  it('shows the loading state again when the transport swaps under an unchanged pathogen', async () => {
+    // Forward-pointer D. The pathogen stamp cannot help here -- the pathogen has
+    // not changed, so the previous run's result still matches it and stays on
+    // screen while the replacement query is in flight. The user would be shown a
+    // list built by a transport that is no longer in use, presented as current,
+    // with nothing saying otherwise.
+    const first = optionTransport({ country: ['Denmark', 'Germany'] });
+    const second = pendingTransport();
+    const { rerender } = render(<ScopeControls onRun={vi.fn()} transport={first.transport} />);
+
+    await screen.findByRole('option', { name: 'Germany' });
+
+    rerender(<ScopeControls onRun={vi.fn()} transport={second.transport} />);
+
+    // Same pathogen throughout: this is the transport-only swap, not a relabel.
+    expect(useAppStore.getState().pathogenId).toBe('sars-cov-2');
+    expect(second.signals).toHaveLength(2);
+    expect(screen.getByText(/loading the country and Pango lineage lists/i)).toBeInTheDocument();
+    // And the stale list is no longer offered as a choice the user can make.
+    expect(screen.queryByRole('option', { name: 'Germany' })).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText(/country/i)).queryAllByRole('option')).toEqual([]);
   });
 
   it('survives a failed option load with the step still runnable', async () => {

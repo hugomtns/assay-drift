@@ -226,6 +226,64 @@ describe('OligoInputPanel', () => {
     expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
   });
 
+  // Forward-pointer A (Task 4.2 -> 4.7). The store commit is debounced, so for
+  // ~200 ms after the last keystroke `oligos` and `roles` describe the
+  // *previous* parse. That was harmless while Continue had no `onClick`; the
+  // moment it navigates, a user who types and immediately clicks would advance
+  // step 2 with the previous parse's oligos and roles -- a wrong answer that
+  // looks entirely plausible. The handler must flush the pending commit before
+  // it navigates, not merely shorten the window.
+  it('advances with the oligos on screen when Continue is clicked before the debounce elapses', async () => {
+    render(<OligoInputPanel />);
+    const textarea = screen.getByLabelText(/paste your oligos/i);
+    const user = userEvent.setup();
+
+    // A first parse that is allowed to land, so "the previous parse" is a real
+    // state and not just the empty initial one. Its guessed role is `probe`,
+    // which the second parse's `forward` has to overwrite.
+    await user.click(textarea);
+    await user.paste('>Old-P\nGACCCCAAAATCAGCGAAAT');
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(useAppStore.getState().oligos.map((o) => o.name)).toEqual(['Old-P']);
+    expect(useAppStore.getState().roles).toEqual({ 'oligo-0': 'probe' });
+
+    // Replace it and click Continue *without* waiting for the debounce.
+    await user.clear(textarea);
+    await user.paste('>N1-F\nTACATGTCTCTGGGACCAATGG');
+    expect(await screen.findByText('N1-F')).toBeInTheDocument();
+    // Guards the test against passing vacuously: if the debounce had already
+    // fired, there would be no stale window left to fall into.
+    expect(useAppStore.getState().oligos.map((o) => o.name)).toEqual(['Old-P']);
+
+    await user.click(screen.getByRole('button', { name: /continue/i }));
+
+    const state = useAppStore.getState();
+    expect(state.step).toBe('binding');
+    expect(state.oligos.map((o) => o.name)).toEqual(['N1-F']);
+    expect(state.oligos[0]?.sequence).toBe('TACATGTCTCTGGGACCAATGG');
+    expect(state.roles).toEqual({ 'oligo-0': 'forward' });
+  });
+
+  // The flush must carry a *manually* chosen role too, not just the guesses
+  // `setOligos` reseeds: a role the user picked for an unguessable oligo lives
+  // only in the component's ref until a commit reapplies it.
+  it('carries a manually chosen role through a Continue clicked before the debounce', async () => {
+    render(<OligoInputPanel />);
+    const textarea = screen.getByLabelText(/paste your oligos/i);
+    const user = userEvent.setup();
+
+    await user.click(textarea);
+    await user.paste('ACGTACGTACGTACGTACGT');
+    await userEvent.selectOptions(await screen.findByLabelText(/role for Oligo 1/i), 'reverse');
+
+    await user.click(screen.getByRole('button', { name: /continue/i }));
+
+    const state = useAppStore.getState();
+    expect(state.step).toBe('binding');
+    expect(state.oligos.map((o) => o.sequence)).toEqual(['ACGTACGTACGTACGTACGT']);
+    expect(state.roles['oligo-0']).toBe('reverse');
+  });
+
   // Regression test (added post-review, invariant 4's boundary): a sequence
   // that never has more than one occurrence carries no occurrence-rank
   // ambiguity at all, so a *transient* disappearance -- a stray character
