@@ -19,6 +19,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "refs": "tsx scripts/fetch-references.ts",
+    "verify:assays": "tsx scripts/verify-assays.ts",
     "fixtures": "tsx scripts/record-fixtures.ts"
   },
   "dependencies": {
