@@ -11,7 +11,12 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseLibrary, verifyAssay, type LibraryAssay } from '../src/data/assays/schema.js';
+import {
+  parseLibrary,
+  verifyAssay,
+  type LibraryAssay,
+  type ResolvedOligo,
+} from '../src/data/assays/schema.js';
 
 const DEFAULT_PATH = join(process.cwd(), 'src', 'data', 'assays', 'library.json');
 
@@ -25,6 +30,19 @@ function err(line: string): void {
 
 function pad(value: string, width: number): string {
   return value.length >= width ? value : value + ' '.repeat(width - value.length);
+}
+
+/**
+ * The tolerance is one mismatch, so a single mistyped base still verifies. The
+ * count is therefore printed for every oligo and flagged when non-zero: an oligo
+ * the source says is exact must show 0 here, and anything else has to be
+ * explained in docs/assay-sources.md before it ships.
+ */
+function oligoLine(r: ResolvedOligo): string {
+  const where = `${r.segment}:${r.start}-${r.end} ${r.strand}`;
+  const count = `${r.mismatches} mismatch${r.mismatches === 1 ? '' : 'es'}`;
+  const flag = r.mismatches > 0 ? '  <-- CHECK against the cited source' : '';
+  return `  ${pad(r.role, 7)}  ${pad(r.name, 12)}  ${pad(where, 26)}  ${count}${flag}`;
 }
 
 function main(): void {
@@ -56,9 +74,12 @@ function main(): void {
     process.exit(0);
   }
 
-  const rows: { assay: LibraryAssay; ok: boolean; problems: string[] }[] = library.assays.map(
-    (assay) => ({ assay, ...verifyAssay(assay) }),
-  );
+  const rows: {
+    assay: LibraryAssay;
+    ok: boolean;
+    problems: string[];
+    resolved: ResolvedOligo[];
+  }[] = library.assays.map((assay) => ({ assay, ...verifyAssay(assay) }));
 
   const idWidth = Math.max(2, ...rows.map((r) => r.assay.id.length));
   const pathogenWidth = Math.max(8, ...rows.map((r) => r.assay.pathogenId.length));
@@ -72,10 +93,24 @@ function main(): void {
     );
   }
 
+  for (const row of rows) {
+    out('');
+    out(`${row.assay.id} (${row.assay.name}) -> ${row.assay.citation.url}`);
+    for (const r of row.resolved) out(oligoLine(r));
+  }
+
+  const inexact = rows.flatMap((r) => r.resolved).filter((r) => r.mismatches > 0);
   const failed = rows.filter((r) => !r.ok);
   out('');
   if (failed.length === 0) {
     out(`Verified ${rows.length} assay${rows.length === 1 ? '' : 's'}: all OK.`);
+    if (inexact.length > 0) {
+      out(
+        `${inexact.length} oligo${inexact.length === 1 ? ' binds' : 's bind'} with a mismatch ` +
+          `(${inexact.map((r) => r.name).join(', ')}). Confirm each against its cited source ` +
+          `and record the mismatch in docs/assay-sources.md.`,
+      );
+    }
     return;
   }
 

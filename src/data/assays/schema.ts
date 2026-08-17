@@ -12,7 +12,7 @@ import { PATHOGENS, type PathogenId } from '../../core/registry';
 import type { OligoRole } from '../../core/oligo-input';
 import { resolveBindingSite } from '../../core/resolution';
 import { checkAssayGeometry } from '../../core/assay-geometry';
-import type { BindingSite } from '../../core/binding';
+import type { BindingSite, Strand } from '../../core/binding';
 import { loadReference } from '../references';
 
 /** A library oligo always carries a role; unlike user input, it is never null. */
@@ -44,9 +44,27 @@ export interface AssayLibrary {
   assays: LibraryAssay[];
 }
 
+/**
+ * Where one oligo actually landed. Reported for every oligo that resolved, in
+ * library order, so the gate can print the mismatch count. The tolerance is one
+ * mismatch, which means a single mistyped base still verifies; the only thing
+ * standing between that slip and a published number is this count being visible.
+ */
+export interface ResolvedOligo {
+  name: string;
+  role: OligoRole;
+  segment: string;
+  strand: Strand;
+  /** 1-based inclusive, plus strand of the reference. */
+  start: number;
+  end: number;
+  mismatches: number;
+}
+
 export interface AssayVerification {
   ok: boolean;
   problems: string[];
+  resolved: ResolvedOligo[];
 }
 
 /** A library oligo must land on one site with at most this many mismatches. */
@@ -178,6 +196,7 @@ export function parseLibrary(raw: unknown): AssayLibrary {
  */
 export function verifyAssay(assay: LibraryAssay): AssayVerification {
   const problems: string[] = [];
+  const resolved: ResolvedOligo[] = [];
 
   if (assay.citation.url.trim() === '') {
     problems.push(`${assay.id}: citation is missing a url.`);
@@ -191,7 +210,7 @@ export function verifyAssay(assay: LibraryAssay): AssayVerification {
     ref = loadReference(assay.pathogenId);
   } catch (err) {
     problems.push(`${assay.id}: ${(err as Error).message}`);
-    return { ok: false, problems };
+    return { ok: false, problems, resolved };
   }
 
   const sites = new Map<LibraryOligo, BindingSite>();
@@ -224,6 +243,15 @@ export function verifyAssay(assay: LibraryAssay): AssayVerification {
       continue;
     }
     sites.set(oligo, resolution.chosen);
+    resolved.push({
+      name: oligo.name,
+      role: oligo.role,
+      segment: resolution.chosen.segment,
+      strand: resolution.chosen.strand,
+      start: resolution.chosen.start,
+      end: resolution.chosen.end,
+      mismatches: resolution.chosen.mismatches,
+    });
   }
 
   const byRole = (role: OligoRole): LibraryOligo[] => assay.oligos.filter((o) => o.role === role);
@@ -263,5 +291,5 @@ export function verifyAssay(assay: LibraryAssay): AssayVerification {
     // there is nothing meaningful left to say about the geometry.
   }
 
-  return { ok: problems.length === 0, problems };
+  return { ok: problems.length === 0, problems, resolved };
 }
