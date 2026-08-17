@@ -1,4 +1,131 @@
 {
   "version": "1",
-  "assays": []
+  "assays": [
+    {
+      "id": "cdc-2019-ncov-n1",
+      "name": "CDC 2019-nCoV_N1",
+      "pathogenId": "sars-cov-2",
+      "target": "N gene (nucleocapsid)",
+      "oligos": [
+        { "name": "2019-nCoV_N1-F", "role": "forward", "sequence": "GACCCCAAAATCAGCGAAAT" },
+        { "name": "2019-nCoV_N1-R", "role": "reverse", "sequence": "TCTGGTTACTGCCAGTTGAATCTG" },
+        { "name": "2019-nCoV_N1-P", "role": "probe", "sequence": "ACCCCGCATTACGTTTGGTGGACC" }
+      ],
+      "citation": {
+        "title": "2019-Novel Coronavirus (2019-nCoV) Real-time rRT-PCR Panel Primers and Probes",
+        "source": "US Centers for Disease Control and Prevention, Division of Viral Diseases (effective 24 Jan 2020)",
+        "url": "https://stacks.cdc.gov/view/cdc/84525",
+        "accessed": "2026-08-17"
+      },
+      "notes": "Probe published with a 5' FAM label and a 3' BHQ-1 quencher; only the nucleotide sequence is stored."
+    },
+    {
+      "id": "corman-e-sarbeco",
+      "name": "Corman E_Sarbeco",
+      "pathogenId": "sars-cov-2",
+      "target": "E gene",
+      "oligos": [
+        { "name": "E_Sarbeco_F", "role": "forward", "sequence": "ACAGGTACGTTAATAGTTAATAGCGT" },
+        { "name": "E_Sarbeco_R", "role": "reverse", "sequence": "ATATTGCAGCAGTACGCACACA" },
+        { "name": "E_Sarbeco_P1", "role": "probe", "sequence": "ACACTAGCCATCCTTACTGCGCTTCG" }
+      ],
+      "citation": {
+        "title": "Detection of 2019 novel coronavirus (2019-nCoV) by real-time RT-PCR, Table 1",
+        "source": "Corman VM et al., Euro Surveill. 2020;25(3):2000045",
+        "url": "https://www.eurosurveillance.org/content/10.2807/1560-7917.ES.2020.25.3.2000045",
+        "accessed": "2026-08-17"
+      },
+      "notes": "Probe published as FAM-ACACTAGCCATCCTTACTGCGCTTCG-BBQ; only the nucleotide sequence is stored."
+    },
+    {
+      "id": "who-h3-ha-266-373",
+      "name": "WHO A(H3) HA (H3-266/H3-373)",
+      "pathogenId": "h3n2",
+      "target": "HA gene",
+      "oligos": [
+        { "name": "H3-266-F", "role": "forward", "sequence": "ACCCTCAGTGTGATGGCTTTCAAA" },
+        { "name": "H3-373-R", "role": "reverse", "sequence": "TAAGGGAGGCATAATCCGGCACAT" },
+        { "name": "H3-315-P", "role": "probe", "sequence": "ACGAAGCAAAGCCTACAGCAACTGTT" }
+      ],
+      "citation": {
+        "title": "WHO information for the molecular detection of influenza viruses (2024), Annex 2 Protocol 2, table \"Primers and probes used for detecting influenza A subtype H1pdm09 and H3 viruses\" (p. 25)",
+        "source": "World Health Organization; assay attributed to Microbiology Division, Centre for Health Protection, Hong Kong SAR, China",
+        "url": "https://cdn.who.int/media/docs/default-source/influenza/molecular-detention-of-influenza-viruses/protocols_influenza_virus_detection_2024.pdf?sfvrsn=df7d268a_10",
+        "accessed": "2026-08-17"
+      },
+      "notes": "Probe published as FAM-ACGAAGCAAAGCCTACAGCAACTGTT-BHQ1; only the nucleotide sequence is stored."
+    },
+    {
+      "id": "who-h5-ha-1201-1387",
+      "name": "WHO A(H5Nx) HA (H5-1201/H5-1387)",
+      "pathogenId": "h5n1",
+      "target": "HA gene",
+      "oligos": [
+        { "name": "H5-1201F", "role": "forward", "sequence": "CARGGGAGTGGDTAYGCBGCAGA" },
+        { "name": "H5-1387R", "role": "reverse", "sequence": "ARAAGTTCAGCRTTRTARGTCCA" },
+        { "name": "H5-1285P", "role": "probe", "sequence": "AARATGAACASTCARTTYGAGG" }
+      ],
+      "citation": {
+        "title": "WHO information for the molecular detection of influenza viruses (2024), Annex 2 Protocol 2 \"Real-time RT-PCR for Influenza A(H5) HA gene\", table \"Primers and probe\" (p. 34)",
+        "source": "World Health Organization; assay attributed to School of Public Health, Faculty of Medicine, The University of Hong Kong",
+        "url": "https://cdn.who.int/media/docs/default-source/influenza/molecular-detention-of-influenza-viruses/protocols_influenza_virus_detection_2024.pdf?sfvrsn=df7d268a_10",
+        "accessed": "2026-08-17"
+      },
+      "notes": "IUPAC wobbles kept exactly as published. Probe published as FAM-AARATGAACASTCARTTYGAGG-MGB; only the nucleotide sequence is stored."
+    },
+    {
+      "id": "who-h3-ha-666-911",
+      "name": "WHO A(H3) HA (H3-666/H3-911)",
+      "pathogenId": "h3n2",
+      "target": "HA gene",
+      "oligos": [
+        { "name": "H3-666-F", "role": "forward", "sequence": "GCACAGGGAATCTAATTGCTCC" },
+        { "name": "H3-911-R", "role": "reverse", "sequence": "ATGCTTCCATTTGGAGTGATGCATTC" },
+        { "name": "H3-732P2", "role": "probe", "sequence": "GATCAGATGCACCCATTGGCAAATGC" }
+      ],
+      "citation": {
+        "title": "WHO information for the molecular detection of influenza viruses (2024), Annex 2 Protocol 2, table \"Primers and probes used for detecting influenza A subtype H1pdm09 and H3 viruses\" (p. 25)",
+        "source": "World Health Organization; assay attributed to Microbiology Division, Centre for Health Protection, Hong Kong SAR, China",
+        "url": "https://cdn.who.int/media/docs/default-source/influenza/molecular-detention-of-influenza-viruses/protocols_influenza_virus_detection_2024.pdf?sfvrsn=df7d268a_10",
+        "accessed": "2026-08-17"
+      },
+      "notes": "Probe published as FAM-GATCAGATGCACCCATTGGCAAATGC-BHQ1; only the nucleotide sequence is stored."
+    },
+    {
+      "id": "who-flua-m-fluam-h5n1",
+      "name": "WHO influenza A M gene (FLUAM) — H5N1 reference",
+      "pathogenId": "h5n1",
+      "target": "M (matrix) gene",
+      "oligos": [
+        { "name": "FLUAM-7-F", "role": "forward", "sequence": "CTTCTAACCGAGGTCGAAACGTA" },
+        { "name": "FLUAM-161-R", "role": "reverse", "sequence": "GGTGACAGGATTGGTCTTGTCTTTA" },
+        { "name": "FLUAM-49-P6", "role": "probe", "sequence": "TCAGGCCCCCTCAAAGCCGAG" }
+      ],
+      "citation": {
+        "title": "WHO information for the molecular detection of influenza viruses (2024), Annex 2 Protocol 1, table \"Primers and probes used for detecting influenza A, B and C viruses\" (p. 22)",
+        "source": "World Health Organization; M gene assay attributed to Terrier O et al., Virol J 2011;8:285",
+        "url": "https://cdn.who.int/media/docs/default-source/influenza/molecular-detention-of-influenza-viruses/protocols_influenza_virus_detection_2024.pdf?sfvrsn=df7d268a_10",
+        "accessed": "2026-08-17"
+      },
+      "notes": "Subtype-independent influenza A assay; bundled once per influenza pathogen because each is verified against its own reference. Probe published as CFO560-TCAGGCCCCCTCAAAGCCGAG-BHQ1; only the nucleotide sequence is stored."
+    },
+    {
+      "id": "who-flua-m-fluam-h3n2",
+      "name": "WHO influenza A M gene (FLUAM) — H3N2 reference",
+      "pathogenId": "h3n2",
+      "target": "M (matrix) gene",
+      "oligos": [
+        { "name": "FLUAM-7-F", "role": "forward", "sequence": "CTTCTAACCGAGGTCGAAACGTA" },
+        { "name": "FLUAM-161-R", "role": "reverse", "sequence": "GGTGACAGGATTGGTCTTGTCTTTA" },
+        { "name": "FLUAM-49-P6", "role": "probe", "sequence": "TCAGGCCCCCTCAAAGCCGAG" }
+      ],
+      "citation": {
+        "title": "WHO information for the molecular detection of influenza viruses (2024), Annex 2 Protocol 1, table \"Primers and probes used for detecting influenza A, B and C viruses\" (p. 22)",
+        "source": "World Health Organization; M gene assay attributed to Terrier O et al., Virol J 2011;8:285",
+        "url": "https://cdn.who.int/media/docs/default-source/influenza/molecular-detention-of-influenza-viruses/protocols_influenza_virus_detection_2024.pdf?sfvrsn=df7d268a_10",
+        "accessed": "2026-08-17"
+      },
+      "notes": "Subtype-independent influenza A assay; bundled once per influenza pathogen because each is verified against its own reference. Probe published as CFO560-TCAGGCCCCCTCAAAGCCGAG-BHQ1; only the nucleotide sequence is stored."
+    }
+  ]
 }

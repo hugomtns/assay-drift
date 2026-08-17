@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { runAnalysis, type AnalysisOligo } from './core/analysis/run';
+import type { BindingSite } from './core/binding';
 import { withCache } from './core/lapis/caching-transport';
 import { createFetchTransport } from './core/lapis/fetch-transport';
 import { getPathogen, PATHOGENS, type PathogenId } from './core/registry';
 import { resolveBindingSite } from './core/resolution';
+import libraryRaw from './data/assays/library.json';
+import { parseLibrary, type LibraryAssay } from './data/assays/schema';
 import { loadReference } from './data/references';
 import { useAppStore } from './state/store';
 import { AppShell } from './ui/AppShell';
@@ -11,32 +14,38 @@ import { BindingResolution } from './ui/binding/BindingResolution';
 import { EmptyState } from './ui/common/EmptyState';
 import { ErrorState } from './ui/common/ErrorState';
 import { Loading } from './ui/common/Loading';
+import { AssayPicker } from './ui/input/AssayPicker';
 import { OligoInputPanel } from './ui/input/OligoInputPanel';
 import { ResultsPanel } from './ui/results/ResultsPanel';
 import { ScopeControls } from './ui/scope/ScopeControls';
 
+/** The label says "since 2020", so the scope the example loads starts there. */
+const WORKED_EXAMPLE_DATE_FROM = '2020-01-01';
+
 /**
- * The landing screen's one-click example.
+ * The landing screen's one-click example: the CDC 2019-nCoV_N1 assay, taken
+ * from the bundled library rather than spelled out here.
  *
- * PLACEHOLDER (Task 5.2 replaces this with the real CDC N1 assay from the
- * verified library). The sequence is the Alpha S-gene deletion window,
- * transcribed from Part I of the plan -- SARS-CoV-2 `main:21765-21786`,
- * verified against live LAPIS. It is never retyped from memory: one wrong base
- * still resolves somewhere and produces a confident, wrong answer.
+ * No primer sequence appears anywhere in this file, and that is the point.
+ * `src/data/assays/library.json` is the one place oligos live, every entry is
+ * traced to an opened source in `docs/assay-sources.md`, and every entry is
+ * re-resolved against the bundled reference by `npm run verify:assays` in CI.
+ * A second copy here would be a second thing to keep true, checked by nothing:
+ * one wrong base does not error, it resolves somewhere else and prints a
+ * confident, wrong percentage.
  *
- * The button's label already names the CDC N1 assay because Task 5.2 owns the
- * swap and the plan's test matches on it. Until then the label describes
- * something the button does not load, so the note beside it says so in plain
- * words; that note goes away with the placeholder.
+ * Looked up by id and thrown on if missing, because a landing button that
+ * quietly does nothing is worse than a build that stops.
  */
-const WORKED_EXAMPLE = {
-  pathogenId: 'sars-cov-2' as const,
-  oligoName: 'Alpha-window',
-  role: 'forward' as const,
-  sequence: 'TACATGTCTCTGGGACCAATGG',
-  /** The label says "since 2020", so the scope it loads has to start there. */
-  dateFrom: '2020-01-01',
-};
+function bundledAssay(id: string): LibraryAssay {
+  const assay = parseLibrary(libraryRaw).assays.find((a) => a.id === id);
+  if (assay === undefined) {
+    throw new Error(`The bundled assay library has no assay with id "${id}".`);
+  }
+  return assay;
+}
+
+const WORKED_EXAMPLE = bundledAssay('cdc-2019-ncov-n1');
 
 /**
  * The oligos the analysis can actually run on: those with both a role and a
@@ -175,29 +184,33 @@ export default function App() {
   const runWorkedExample = () => {
     const store = useAppStore.getState();
     // Resets everything, including a pathogen the user had picked: the bundled
-    // window is meaningless against any other reference.
+    // assay is meaningless against any other reference.
     store.setPathogen(WORKED_EXAMPLE.pathogenId);
-    const oligo = {
-      id: 'oligo-0',
-      name: WORKED_EXAMPLE.oligoName,
-      role: WORKED_EXAMPLE.role,
-      sequence: WORKED_EXAMPLE.sequence,
-    };
-    useAppStore.getState().setOligos([oligo]);
+    const oligos = WORKED_EXAMPLE.oligos.map((oligo, index) => ({
+      id: `oligo-${index}`,
+      name: oligo.name,
+      role: oligo.role,
+      sequence: oligo.sequence,
+    }));
+    useAppStore.getState().setOligos(oligos);
 
-    const resolution = resolveBindingSite(
-      oligo.sequence,
-      loadReference(WORKED_EXAMPLE.pathogenId),
-    );
-    useAppStore.getState().setResolution(oligo.id, resolution);
-    if (resolution.chosen === null) {
-      // Should be unreachable for a bundled sequence, but showing step 2 is
-      // the honest fallback: it says exactly what could not be placed.
-      useAppStore.getState().goTo('binding');
-      return;
+    const reference = loadReference(WORKED_EXAMPLE.pathogenId);
+    const sites: Record<string, BindingSite> = {};
+    for (const oligo of oligos) {
+      const resolution = resolveBindingSite(oligo.sequence, reference);
+      useAppStore.getState().setResolution(oligo.id, resolution);
+      if (resolution.chosen === null) {
+        // Should be unreachable: the verification gate re-resolves every
+        // library oligo in CI. Showing step 2 is the honest fallback -- it
+        // says exactly which oligo could not be placed, rather than running an
+        // analysis over a partial assay.
+        useAppStore.getState().goTo('binding');
+        return;
+      }
+      sites[oligo.id] = resolution.chosen;
     }
-    useAppStore.getState().commitSites({ [oligo.id]: resolution.chosen });
-    useAppStore.getState().setScope({ dateFrom: WORKED_EXAMPLE.dateFrom });
+    useAppStore.getState().commitSites(sites);
+    useAppStore.getState().setScope({ dateFrom: WORKED_EXAMPLE_DATE_FROM });
     start();
   };
 
@@ -228,12 +241,8 @@ export default function App() {
           >
             See how the CDC N1 assay has drifted since 2020
           </button>
-          <p className="text-sm text-amber-900">
-            Placeholder: this currently loads a single 22-nt window over the Alpha ΔH69/V70
-            deletion in the SARS-CoV-2 spike gene, not the CDC N1 assay. The verified assay
-            library, and with it the real N1 primers and probe, lands in a later task.
-          </p>
         </section>
+        <AssayPicker />
       </div>
     );
   } else if (step === 'binding') {

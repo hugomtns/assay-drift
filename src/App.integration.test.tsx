@@ -119,7 +119,7 @@ describe('App transport identity', () => {
 // and runs an analysis in one click", and its own test only asserts the button
 // exists. These two walk it.
 describe('App worked example', () => {
-  it('resolves the bundled window and runs an analysis in one click', async () => {
+  it('resolves the bundled assay and runs an analysis in one click', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const body = String(input).endsWith('/aggregated')
         ? { data: [{ count: 4000, date: '2025-01-01' }] }
@@ -138,25 +138,67 @@ describe('App worked example', () => {
     });
     const state = useAppStore.getState();
     expect(state.step).toBe('results');
-    // Resolved without the user ever seeing step 2, at the coordinates the
-    // plan records for this window.
+    // All three CDC N1 oligos resolved without the user ever seeing step 2, at
+    // the coordinates docs/assay-sources.md records for the bundled assay.
     expect(state.chosenSites['oligo-0']).toMatchObject({
-      segment: 'main', strand: 'plus', start: 21765, end: 21786, mismatches: 0,
+      segment: 'main', strand: 'plus', start: 28287, end: 28306, mismatches: 0,
+    });
+    expect(state.chosenSites['oligo-1']).toMatchObject({
+      segment: 'main', strand: 'minus', start: 28335, end: 28358, mismatches: 0,
+    });
+    expect(state.chosenSites['oligo-2']).toMatchObject({
+      segment: 'main', strand: 'plus', start: 28309, end: 28332, mismatches: 0,
     });
     // The label promises "since 2020", so the scope it loads has to start there.
     expect(state.scope.dateFrom).toBe('2020-01-01');
-    expect(screen.getByLabelText('Headline mismatch rate')).toHaveTextContent(
-      'n = 4,000 of 4,000 assessable sequences',
-    );
+    // A three-oligo assay renders a headline per oligo, so the single-match
+    // query this used to be throws "Found multiple elements". Asserting the
+    // denominator on every one of them is the stronger reading of the same
+    // intent, not a relaxed one: it would catch a headline that went missing
+    // as well as one that printed the wrong n.
+    const headlines = screen.getAllByLabelText('Headline mismatch rate');
+    expect(headlines).toHaveLength(3);
+    for (const headline of headlines) {
+      expect(headline).toHaveTextContent('n = 4,000 of 4,000 assessable sequences');
+    }
   });
 
-  it('says on screen that it does not yet load the assay its label names', () => {
+  it('loads the assay its label names, with all three roles already assigned', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      () => new Promise(() => { /* never resolves; this test reads the store, not the results */ }),
+    );
     render(<App />);
     const button = screen.getByRole('button', { name: /CDC N1 assay/i });
-    // The accessible name is the plan's, and Task 5.2 makes it true. Until
-    // then the note beside it has to say what actually loads.
     expect(button).toHaveAccessibleName('See how the CDC N1 assay has drifted since 2020');
-    expect(screen.getByText(/placeholder/i)).toHaveTextContent(/not the CDC N1 assay/i);
+    // The note that used to sit here said the button loaded something else.
+    // Now it loads what it says, so nothing on screen may claim otherwise.
+    expect(screen.queryByText(/placeholder/i)).not.toBeInTheDocument();
+
+    await userEvent.click(button);
+
+    // A library assay is a primer pair plus a probe, and the roles come with
+    // it -- that is what makes this one click rather than a trip through
+    // step 1's role guessing.
+    expect(useAppStore.getState().oligos).toEqual([
+      { id: 'oligo-0', name: '2019-nCoV_N1-F', role: 'forward', sequence: 'GACCCCAAAATCAGCGAAAT' },
+      {
+        id: 'oligo-1',
+        name: '2019-nCoV_N1-R',
+        role: 'reverse',
+        sequence: 'TCTGGTTACTGCCAGTTGAATCTG',
+      },
+      {
+        id: 'oligo-2',
+        name: '2019-nCoV_N1-P',
+        role: 'probe',
+        sequence: 'ACCCCGCATTACGTTTGGTGGACC',
+      },
+    ]);
+    expect(useAppStore.getState().roles).toEqual({
+      'oligo-0': 'forward',
+      'oligo-1': 'reverse',
+      'oligo-2': 'probe',
+    });
   });
 });
 
