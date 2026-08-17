@@ -2,6 +2,7 @@ import { getPathogen } from '../../core/registry';
 import type { AnalysisResult } from '../../core/analysis/run';
 import { CaveatPanel } from '../CaveatPanel';
 import { AttributionTable } from './AttributionTable';
+import { ExportButtons } from './ExportButtons';
 import { HeadlineCard } from './HeadlineCard';
 import { InsertionNote } from './InsertionNote';
 import { PositionProfile } from './PositionProfile';
@@ -46,6 +47,8 @@ export function ResultsPanel({ result }: ResultsPanelProps) {
       <p className="text-sm text-slate-700">
         {`${formatCount(result.nScope)} ${cfg.label} sequences match this scope, collected ${result.scope.dateFrom} to ${result.scope.dateTo} inclusive. Data version ${result.dataVersion}, read ${result.generatedAt}, over ${formatCount(result.queryCount)} queries.`}
       </p>
+
+      <ExportButtons result={result} />
 
       {result.oligos.map((oligo) => (
         <div

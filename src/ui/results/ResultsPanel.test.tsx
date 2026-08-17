@@ -114,6 +114,15 @@ describe('ResultsPanel', () => {
     expect(screen.getAllByText(FIXED_CAVEATS[0]!)).toHaveLength(1);
   });
 
+  it('offers the exports and the methods paragraph, once for the whole result', () => {
+    render(<ResultsPanel result={result()} />);
+    expect(
+      screen.getAllByRole('button', { name: /^Download CSV/ }).map((b) => b.textContent),
+    ).toEqual(['Download CSV — one row per oligo', 'Download CSV — one row per position']);
+    expect(screen.getByRole('button', { name: 'Download JSON' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy methods paragraph' })).toBeInTheDocument();
+  });
+
   it('states which snapshot of the data the numbers came from', () => {
     render(<ResultsPanel result={result()} />);
     expect(screen.getByText(/1719792000/)).toBeInTheDocument();
