@@ -1,10 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { runAnalysis, type AnalysisOligo } from './core/analysis/run';
-import type { BindingSite } from './core/binding';
+import { findBindingSites, type BindingSite } from './core/binding';
 import { withCache } from './core/lapis/caching-transport';
 import { createFetchTransport } from './core/lapis/fetch-transport';
+import type { OligoInput } from './core/oligo-input';
+import {
+  decodePermalink,
+  encodePermalink,
+  PERMALINK_PREFIX,
+  type PermalinkScope,
+  type PermalinkState,
+} from './core/permalink';
 import { getPathogen, PATHOGENS, type PathogenId } from './core/registry';
 import { resolveBindingSite } from './core/resolution';
+import type { Scope } from './core/scope';
 import libraryRaw from './data/assays/library.json';
 import { parseLibrary, type LibraryAssay } from './data/assays/schema';
 import { loadReference } from './data/references';
@@ -69,6 +78,157 @@ function analysisOligos(state: ReturnType<typeof useAppStore.getState>): Analysi
 
 const messageOf = (err: unknown): string =>
   err instanceof Error ? err.message : `Unexpected failure: ${String(err)}`;
+
+/** Everything a decoded link has to become before the store will accept it. */
+interface RestoredQuery {
+  pathogenId: PathogenId;
+  oligos: OligoInput[];
+  /** Keyed by the store's oligo id, not by name. */
+  sites: Record<string, BindingSite>;
+  scope: PermalinkScope;
+}
+
+/**
+ * A URL hash into a runnable query, or `null` if it is not one.
+ *
+ * `decodePermalink` refuses anything malformed, but it deliberately knows
+ * nothing about reference genomes, so it cannot tell whether the site a link
+ * names is a site that oligo actually has. That check belongs here, and it is
+ * not a formality: a link is untrusted input, and `start()` would otherwise
+ * happily build a window from a segment name and a coordinate a stranger chose.
+ *
+ * The site is re-derived rather than reconstructed arithmetically. A link
+ * carries only segment, strand and start; `end`, `mismatches` and
+ * `mismatchOligoIndexes` are functions of the oligo and the reference, and
+ * every one of them feeds a printed number. Taking them from
+ * `findBindingSites` means a restored analysis is the same object the app would
+ * have produced itself, and a link that names a position the oligo does not
+ * bind is rejected rather than analysed at a plausible-looking coordinate.
+ */
+function restoreFromHash(hash: string): RestoredQuery | null {
+  const decoded = decodePermalink(hash);
+  if (decoded === null) return null;
+  try {
+    const reference = loadReference(decoded.pathogenId);
+    const oligos: OligoInput[] = [];
+    const sites: Record<string, BindingSite> = {};
+    for (const [index, oligo] of decoded.oligos.entries()) {
+      const id = `oligo-${index}`;
+      const wanted = decoded.sites[oligo.name];
+      if (wanted === undefined) return null;
+      const site = findBindingSites(oligo.sequence, reference).find(
+        (candidate) =>
+          candidate.segment === wanted.segment &&
+          candidate.strand === wanted.strand &&
+          candidate.start === wanted.start,
+      );
+      if (site === undefined) return null;
+      oligos.push({ id, name: oligo.name, role: oligo.role, sequence: oligo.sequence });
+      sites[id] = site;
+    }
+    return { pathogenId: decoded.pathogenId, oligos, sites, scope: decoded.scope };
+  } catch {
+    // A link does not get to crash the app on the way in.
+    return null;
+  }
+}
+
+/**
+ * Replaces the URL hash with a link that reproduces the analysis just finished.
+ *
+ * `replaceState`, never `pushState`: a result the user did not navigate to
+ * should not become a back-button stop, and re-running with a tweaked scope
+ * would otherwise leave a trail of half-considered queries behind the one
+ * on screen.
+ *
+ * Called only from the success path, so the address bar never advertises a
+ * result that a failed or superseded run did not produce.
+ */
+function publishPermalink(scope: Scope, oligos: AnalysisOligo[]): void {
+  const state: PermalinkState = {
+    pathogenId: scope.pathogenId,
+    oligos: oligos.map((o) => ({ name: o.name, role: o.role, sequence: o.sequence })),
+    sites: Object.fromEntries(
+      oligos.map((o) => [
+        o.name,
+        { segment: o.site.segment, strand: o.site.strand, start: o.site.start },
+      ]),
+    ),
+    scope: {
+      dateFrom: scope.dateFrom,
+      dateTo: scope.dateTo,
+      countries: scope.countries,
+      lineages: scope.lineages,
+    },
+  };
+  try {
+    window.history.replaceState(null, '', encodePermalink(state));
+  } catch {
+    // Too large for a usable link, or two oligos share a name. Clearing is the
+    // honest outcome: a stale hash from an earlier run would claim to
+    // reproduce the result now on screen. `CopyLinkButton` reads the hash back
+    // at click time, so it says so rather than copying a URL that lies.
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+}
+
+type CopyState = 'idle' | 'copied' | 'unavailable' | 'failed';
+
+const COPY_MESSAGES: Readonly<Record<CopyState, string>> = Object.freeze({
+  idle: '',
+  copied: 'Link copied.',
+  unavailable:
+    'This analysis is too large to put in a link, so there is nothing to copy. Narrow the scope or run fewer oligos at once.',
+  failed: 'Could not reach the clipboard. The link is in the address bar and can be copied from there.',
+});
+
+/**
+ * Copies the current URL, which is the permalink, and says what happened.
+ *
+ * The hash is read at click time rather than at render time on purpose: it is
+ * written by `publishPermalink` outside React, so a value captured during
+ * render could be a frame behind, and the one case that matters -- no link,
+ * because the query would not fit -- is precisely the one where copying the
+ * URL anyway would hand someone a link to the empty app.
+ */
+function CopyLinkButton() {
+  const [state, setState] = useState<CopyState>('idle');
+
+  const copy = (): void => {
+    if (!window.location.hash.startsWith(PERMALINK_PREFIX)) {
+      setState('unavailable');
+      return;
+    }
+    const clipboard: Clipboard | undefined = navigator.clipboard;
+    if (clipboard === undefined) {
+      setState('failed');
+      return;
+    }
+    clipboard.writeText(window.location.href).then(
+      () => { setState('copied'); },
+      () => { setState('failed'); },
+    );
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <button
+        type="button"
+        onClick={copy}
+        className="rounded border border-slate-900 px-3 py-1 text-sm text-slate-900"
+      >
+        Copy link to this analysis
+      </button>
+      {/*
+        Always mounted with its text swapped in: a live region inserted at the
+        same instant as its text is frequently never announced.
+      */}
+      <span role="status" className="text-sm text-slate-600">
+        {COPY_MESSAGES[state]}
+      </span>
+    </div>
+  );
+}
 
 interface PathogenSelectorProps {
   value: PathogenId;
@@ -167,6 +327,11 @@ export default function App() {
       .then((analysis) => {
         if (controller.signal.aborted) return;
         useAppStore.getState().analysisSucceeded(analysis);
+        // Only here. A superseded, failed or aborted run must not publish a
+        // link claiming to reproduce a result it never produced. The `scope`
+        // and `oligos` written are the ones this run used, not whatever the
+        // store holds by the time it lands.
+        publishPermalink(scope, oligos);
       })
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
@@ -180,6 +345,42 @@ export default function App() {
     },
     [],
   );
+
+  /**
+   * The link the page was opened with, read once and never again.
+   *
+   * Reading it in a `useState` initialiser rather than in the effect below is
+   * what breaks the loop: `publishPermalink` writes the hash on every
+   * successful run, and an effect that read `window.location.hash` live would
+   * see its own write and restart the analysis it had just finished. This value
+   * is captured before any run can exist, so the writer and the reader are
+   * permanently out of each other's reach.
+   *
+   * It also keeps the decode out of the effect body. `restored` is a pure
+   * function of a frozen string, so the effect's dependency list is genuinely
+   * stable and the "shared link could not be read" notice is derived during
+   * render -- not set from inside an effect, which `react-hooks/set-state-in-effect`
+   * forbids and which would render one frame of the wrong screen anyway.
+   */
+  const [initialHash] = useState(() => window.location.hash);
+  const restored = useMemo(() => restoreFromHash(initialHash), [initialHash]);
+  const linkUnreadable = initialHash.startsWith(PERMALINK_PREFIX) && restored === null;
+
+  useEffect(() => {
+    if (restored === null) return;
+    // Deliberately the same `start()` every other run goes through, so the
+    // restored run gets the same abort discipline and the same single
+    // in-flight controller. A second, parallel run path here would be a second
+    // thing to keep abortable.
+    const store = useAppStore.getState();
+    // Resets oligos, sites, resolutions and scope first; everything below then
+    // writes the link's own values over a known-clean state.
+    store.setPathogen(restored.pathogenId);
+    useAppStore.getState().setOligos(restored.oligos);
+    useAppStore.getState().commitSites(restored.sites);
+    useAppStore.getState().setScope(restored.scope);
+    start();
+  }, [restored, start]);
 
   const runWorkedExample = () => {
     const store = useAppStore.getState();
@@ -229,6 +430,14 @@ export default function App() {
   } else if (step === 'input') {
     content = (
       <div className="flex flex-col gap-8">
+        {linkUnreadable && (
+          <p role="alert" className="rounded bg-amber-50 p-3 text-sm text-amber-900">
+            The shared link in this page's address could not be read, so nothing was restored. It
+            may have been truncated in transit, or it may name a pathogen, a sequence or a binding
+            site this version does not accept. Start below, or ask whoever sent it for the link
+            again.
+          </p>
+        )}
         <OligoInputPanel />
         <section aria-labelledby="worked-example-heading" className="flex flex-col items-start gap-2">
           <h2 id="worked-example-heading" className="text-base font-semibold">
@@ -252,18 +461,29 @@ export default function App() {
   } else if (result === null) {
     content = <p className="text-sm text-slate-700">No analysis has been run yet.</p>;
   } else if (result.nScope === 0) {
+    // A scope that matched nothing is still a finished, reproducible run, so it
+    // gets a link too -- that is exactly the result someone needs to be able to
+    // send to a colleague and ask "do you see this as well?".
     content = (
-      <EmptyState
-        scope={result.scope}
-        pathogenLabel={getPathogen(result.pathogenId).label}
-        lineageLabel={getPathogen(result.pathogenId).lineageLabel}
-        onChangeScope={() => {
-          goTo('scope');
-        }}
-      />
+      <div className="flex flex-col gap-6">
+        <CopyLinkButton />
+        <EmptyState
+          scope={result.scope}
+          pathogenLabel={getPathogen(result.pathogenId).label}
+          lineageLabel={getPathogen(result.pathogenId).lineageLabel}
+          onChangeScope={() => {
+            goTo('scope');
+          }}
+        />
+      </div>
     );
   } else {
-    content = <ResultsPanel result={result} />;
+    content = (
+      <div className="flex flex-col gap-6">
+        <CopyLinkButton />
+        <ResultsPanel result={result} />
+      </div>
+    );
   }
 
   return (

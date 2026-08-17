@@ -1,11 +1,14 @@
 import { render, screen, waitFor } from '@testing-library/react';
 // Imports below this line support the suites added at the foot of the file;
 // the suite above is transcribed from the task brief.
-import { act, within } from '@testing-library/react';
+import { act, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, describe, it, expect, beforeEach, vi } from 'vitest';
 import App from './App';
 import { useAppStore } from './state/store';
+import { decodePermalink, encodePermalink, type PermalinkState } from './core/permalink';
+import libraryRaw from './data/assays/library.json';
+import { parseLibrary, verifyAssay } from './data/assays/schema';
 
 beforeEach(() => { useAppStore.getState().reset(); });
 // `withCache` persists to sessionStorage, which jsdom keeps for the whole file.
@@ -14,6 +17,11 @@ beforeEach(() => { useAppStore.getState().reset(); });
 // clear the store between tests, never to disable the cache -- the cache is
 // what keeps the analysis to 3 + 4N queries.
 beforeEach(() => { sessionStorage.clear(); });
+// Task 5.3 put a permalink in the URL hash, and jsdom keeps one URL for the
+// whole file. A hash left behind by one test would make the next one restore a
+// query and auto-run an analysis before its own arrangement had happened, so
+// every test starts from a bare URL.
+beforeEach(() => { window.history.replaceState(null, '', '/'); });
 
 describe('App', () => {
   it('walks from pasted oligos to results', async () => {
@@ -293,5 +301,242 @@ describe('App analysis abort', () => {
     });
     expect(useAppStore.getState().status).toBe('loading');
     expect(useAppStore.getState().error).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 5.3 — permalinks.
+// ---------------------------------------------------------------------------
+
+/** Every endpoint answers; `aggregated` carries the count. */
+const stubLapis = (count: number) =>
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const body = String(input).endsWith('/aggregated')
+      ? { data: [{ count, date: '2021-02-01' }] }
+      : { data: [] };
+    return new Response(JSON.stringify({ ...body, info: { dataVersion: 'dv', requestId: 'rid' } }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  });
+
+/**
+ * The bundled CDC N1 assay as a permalink, built from the library and its own
+ * verification pass rather than transcribed -- no oligo sequence and no
+ * coordinate is written out here (Global Constraint 2).
+ */
+const CDC_N1 = parseLibrary(libraryRaw).assays.find((a) => a.id === 'cdc-2019-ncov-n1')!;
+const CDC_N1_LINK: PermalinkState = {
+  pathogenId: CDC_N1.pathogenId,
+  oligos: CDC_N1.oligos.map((o) => ({ name: o.name, role: o.role, sequence: o.sequence })),
+  sites: Object.fromEntries(
+    verifyAssay(CDC_N1).resolved.map((r) => [
+      r.name,
+      { segment: r.segment, strand: r.strand, start: r.start },
+    ]),
+  ),
+  scope: { dateFrom: '2021-02-01', dateTo: '2021-03-01', countries: [], lineages: [] },
+};
+
+/**
+ * Counts analyses exactly, by standing in for the store action every run has to
+ * go through.
+ *
+ * Counting fetches cannot do this job here: `withCache` de-duplicates by
+ * request key, so a second, identical analysis issues no new request at all and
+ * an effect that fired twice would look identical to one that fired once.
+ */
+const REAL_START_ANALYSIS = useAppStore.getState().startAnalysis;
+const countAnalyses = () => {
+  const spy = vi.fn(() => { REAL_START_ANALYSIS(); });
+  useAppStore.setState({ startAnalysis: spy });
+  return spy;
+};
+
+describe('App permalink on load', () => {
+  afterEach(() => { useAppStore.setState({ startAnalysis: REAL_START_ANALYSIS }); });
+
+  it('restores a decodable hash and runs exactly one analysis', async () => {
+    stubLapis(1000);
+    const analyses = countAnalyses();
+    window.location.hash = encodePermalink(CDC_N1_LINK);
+
+    render(<App />);
+    await waitFor(() => {
+      expect(useAppStore.getState().status).toBe('ready');
+    });
+
+    expect(analyses).toHaveBeenCalledTimes(1);
+    const state = useAppStore.getState();
+    expect(state.step).toBe('results');
+    expect(state.oligos.map((o) => o.name)).toEqual(CDC_N1.oligos.map((o) => o.name));
+    expect(state.roles).toEqual({ 'oligo-0': 'forward', 'oligo-1': 'reverse', 'oligo-2': 'probe' });
+    expect(state.scope).toMatchObject(CDC_N1_LINK.scope);
+    // The chosen site travelled in the link and was rebuilt against the bundled
+    // reference, so the derived fields the link does not carry are present too.
+    expect(state.chosenSites['oligo-0']).toMatchObject({
+      segment: 'main', strand: 'plus', start: 28287, end: 28306, mismatches: 0,
+    });
+  });
+
+  it('aborts the restored run when App unmounts, like any other run', async () => {
+    const signals: AbortSignal[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation((_input, init) => {
+      if (init?.signal) signals.push(init.signal);
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted.', 'AbortError'));
+        });
+      });
+    });
+    window.location.hash = encodePermalink(CDC_N1_LINK);
+
+    const { unmount } = render(<App />);
+    expect(signals.length).toBeGreaterThan(0);
+    // A second start() would have aborted the first one's controller, so this
+    // also fails if the load path runs the analysis twice.
+    expect(signals.some((s) => s.aborted)).toBe(false);
+
+    unmount();
+    expect(signals.every((s) => s.aborted)).toBe(true);
+  });
+
+  it('falls back to the empty first screen, and says so, when the link cannot be read', () => {
+    const fetchSpy = stubLapis(1000);
+    fetchSpy.mockClear();
+    window.location.hash = '#q=' + encodeURIComponent('{"pathogenId":"ebola"}');
+
+    render(<App />);
+
+    expect(screen.getByRole('button', { name: /CDC N1 assay/i })).toBeInTheDocument();
+    expect(screen.getByText(/link .*could not be read/i)).toBeInTheDocument();
+    expect(useAppStore.getState().status).toBe('idle');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('says nothing about a link when there is no link', () => {
+    stubLapis(1000);
+    render(<App />);
+    expect(screen.queryByText(/could not be read/i)).not.toBeInTheDocument();
+  });
+
+  /**
+   * A link carries only segment, strand and start, and the app re-derives the
+   * rest of the site from the reference. This is what makes that re-derivation
+   * load-bearing rather than decorative: `decodePermalink` validates shape and
+   * knows nothing about reference genomes, so a coordinate that is perfectly
+   * well-formed and simply untrue has to be caught here or not at all. Without
+   * it a stranger's link would be analysed at a plausible-looking position,
+   * and every number on the page would be about a window the oligo does not
+   * bind.
+   */
+  it('refuses a link naming a site its oligo does not actually bind', () => {
+    const fetchSpy = stubLapis(1000);
+    fetchSpy.mockClear();
+    const name = CDC_N1.oligos[0]!.name;
+    const real = CDC_N1_LINK.sites[name]!;
+    window.location.hash = encodePermalink({
+      ...CDC_N1_LINK,
+      // One base off. The shape is flawless; the coordinate is a lie.
+      sites: { ...CDC_N1_LINK.sites, [name]: { ...real, start: real.start + 1 } },
+    });
+
+    render(<App />);
+
+    expect(screen.getByText(/link .*could not be read/i)).toBeInTheDocument();
+    expect(useAppStore.getState().status).toBe('idle');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('App permalink on success', () => {
+  afterEach(() => { useAppStore.setState({ startAnalysis: REAL_START_ANALYSIS }); });
+
+  it('publishes the query as a hash once the analysis succeeds', async () => {
+    stubLapis(4000);
+    const analyses = countAnalyses();
+    expect(window.location.hash).toBe('');
+
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: /CDC N1 assay/i }));
+    await waitFor(() => {
+      expect(useAppStore.getState().status).toBe('ready');
+    });
+
+    const decoded = decodePermalink(window.location.hash);
+    expect(decoded).not.toBeNull();
+    expect(decoded?.pathogenId).toBe('sars-cov-2');
+    expect(decoded?.oligos.map((o) => o.name)).toEqual(CDC_N1.oligos.map((o) => o.name));
+    expect(decoded?.scope.dateFrom).toBe('2020-01-01');
+    expect(decoded?.sites[CDC_N1.oligos[0]!.name]).toEqual({
+      segment: 'main', strand: 'plus', start: 28287,
+    });
+    // Writing the hash must not feed the reader that runs on load: one click,
+    // one analysis, however many renders the write causes.
+    expect(analyses).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the back button alone by replacing rather than pushing', async () => {
+    stubLapis(4000);
+    const pushState = vi.spyOn(window.history, 'pushState');
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('button', { name: /CDC N1 assay/i }));
+    await waitFor(() => {
+      expect(useAppStore.getState().status).toBe('ready');
+    });
+
+    expect(window.location.hash).not.toBe('');
+    expect(pushState).not.toHaveBeenCalled();
+    pushState.mockRestore();
+  });
+
+  it('publishes no link for a run that failed', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ error: { status: 400, title: 'Bad', detail: 'Unknown field' } }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    );
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('button', { name: /CDC N1 assay/i }));
+    await waitFor(() => {
+      expect(useAppStore.getState().status).toBe('error');
+    });
+
+    // A link that claims to reproduce a result there is no result for.
+    expect(window.location.hash).toBe('');
+  });
+
+  it('offers a copy-link button beside the result, and copies the whole URL', async () => {
+    stubLapis(4000);
+    const written: string[] = [];
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async (text: string) => { written.push(text); } },
+    });
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('button', { name: /CDC N1 assay/i }));
+    await waitFor(() => {
+      expect(useAppStore.getState().status).toBe('ready');
+    });
+
+    const button = screen.getByRole('button', { name: /copy link/i });
+    // `fireEvent`, not `userEvent`: user-event installs its own clipboard stub
+    // on setup, which would replace the one this test is watching.
+    await act(async () => { fireEvent.click(button); });
+
+    expect(written).toEqual([window.location.href]);
+    expect(written[0]).toContain('#q=');
+    expect(await screen.findByText(/link copied/i)).toBeInTheDocument();
+  });
+
+  it('shows no copy-link button before there is a result to link to', () => {
+    stubLapis(4000);
+    render(<App />);
+    expect(screen.queryByRole('button', { name: /copy link/i })).not.toBeInTheDocument();
   });
 });

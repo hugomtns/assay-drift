@@ -81,11 +81,25 @@ function optionValues(rows: AggregatedRow[], field: string): string[] {
   return sorted([...seen]);
 }
 
+/** The optgroup a selected value sits in when the dataset does not have it. */
+const NOT_IN_DATASET_LABEL = 'Not in this dataset';
+
+interface MergedOptions {
+  /** Rendered plainly, in the order the load returned them. */
+  options: string[];
+  /**
+   * Selected values the loaded list does not contain, rendered inside a
+   * labelled optgroup. Empty whenever there is no loaded list to judge against.
+   */
+  unmatched: string[];
+}
+
 /**
  * The options actually rendered: everything the load returned, plus any value
- * already selected that the list does not contain.
+ * already selected that the list does not contain -- with the second group kept
+ * distinguishable from the first.
  *
- * Without this, a selection can be filtering the analysis while being
+ * Merging at all is what stops a selection filtering the analysis while being
  * invisible. The selection lives in the store; the options that give it
  * something to sit in live in this component's `useState`. So a remount (step
  * back, step forward -- fresh state, nothing loaded yet) or a failed load
@@ -95,13 +109,22 @@ function optionValues(rows: AggregatedRow[], field: string): string[] {
  * asserting the analysis is unfiltered at the exact moment it is filtered, and
  * failing silently while it did.
  *
- * Merging rather than clearing the selection is the right direction: the
- * selection is the user's stated intent, and an option list that has not
- * arrived is no evidence against it.
+ * Separating the two groups is what stops the opposite failure, and it is the
+ * one permalinks introduce (Task 5.3). Matching is by exact string, so a link
+ * carrying `countries: ["germany"]` -- lower case, a typo, or a value from a
+ * different dataset -- used to render an option indistinguishable from a real
+ * one. The analysis then returns nothing while every part of the UI insists the
+ * filter is legitimate: the worst shape a caveat can take is an absent one.
+ *
+ * `loaded === null` means *no evidence*, not *no match*: nothing has arrived
+ * yet, or the load failed. A value cannot be reported as absent from a list
+ * that was never seen, so in that case everything is merged in plainly and the
+ * component's existing loading/failure notices speak instead.
  */
-function withSelected(options: string[], selected: string[]): string[] {
-  const missing = selected.filter((value) => !options.includes(value));
-  return missing.length === 0 ? options : sorted([...options, ...missing]);
+function mergeSelection(loaded: string[] | null, selected: string[]): MergedOptions {
+  if (loaded === null) return { options: sorted([...new Set(selected)]), unmatched: [] };
+  const unmatched = selected.filter((value) => !loaded.includes(value));
+  return { options: loaded, unmatched: sorted([...new Set(unmatched)]) };
 }
 
 interface ScopeControlsProps {
@@ -229,14 +252,20 @@ export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
     loaded !== null && loaded.pathogenId === pathogenId && loaded.transport === transport
       ? loaded
       : null;
-  // Merged with the current selection so a filter can never be applied without
-  // being on screen. See `withSelected`.
-  const countryOptions = withSelected(options?.countries ?? [], scope.countries);
-  const lineageOptions = withSelected(options?.lineages ?? [], scope.lineages);
   // No transport means no load was ever started, which renders identically to
   // a load that returned nothing -- not as a stuck spinner.
   const loading = transport !== undefined && options === null;
   const failed = options?.failed === true;
+  // A failed load returns empty lists, which is not the same fact as "the
+  // dataset does not contain this value". Only a load that succeeded is
+  // evidence, so only that becomes a list to judge a selection against.
+  const dataset = options !== null && !options.failed ? options : null;
+  // Merged with the current selection so a filter can never be applied without
+  // being on screen, and split so one the dataset does not have cannot pass
+  // itself off as one it does. See `mergeSelection`.
+  const countryOptions = mergeSelection(dataset?.countries ?? null, scope.countries);
+  const lineageOptions = mergeSelection(dataset?.lineages ?? null, scope.lineages);
+  const unmatched = [...countryOptions.unmatched, ...lineageOptions.unmatched];
 
   const fromMissing = scope.dateFrom === '';
   const toMissing = scope.dateTo === '';
@@ -287,6 +316,13 @@ export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
     optionsMessage = `The ${listNames} lists could not be loaded. Your filters are still being applied: ${retained.join(', ')}.`;
   } else if (failed) {
     optionsMessage = `The ${listNames} lists could not be loaded. Leaving both empty analyses everything, so you can still continue.`;
+  } else if (unmatched.length > 0) {
+    // Reachable in practice only from a shared link, which is why the message
+    // says so: a value the user picked came from the list by construction.
+    // Naming them matters as much as marking them -- the optgroup is only
+    // visible to someone already looking at the listbox, and this step can be
+    // walked past entirely on the way to a result.
+    optionsMessage = `Not in the loaded ${listNames} lists, so ${unmatched.length === 1 ? 'it matches' : 'they match'} no sequences: ${unmatched.join(', ')}. Values like these usually arrive in a shared link; remove them to widen the analysis.`;
   }
 
   return (
@@ -366,11 +402,20 @@ export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
             onChange={(e) => setScope({ countries: selectedValues(e) })}
             className="min-w-56 rounded border border-slate-300 px-2 py-1"
           >
-            {countryOptions.map((country) => (
+            {countryOptions.options.map((country) => (
               <option key={country} value={country}>
                 {country}
               </option>
             ))}
+            {countryOptions.unmatched.length > 0 && (
+              <optgroup label={NOT_IN_DATASET_LABEL}>
+                {countryOptions.unmatched.map((country) => (
+                  <option key={country} value={country}>
+                    {country}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
           <p id="scope-countries-hint" className="text-xs text-slate-600">
             Leave empty to include all countries. This list covers the whole dataset, not just your
@@ -391,11 +436,20 @@ export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
             onChange={(e) => setScope({ lineages: selectedValues(e) })}
             className="min-w-56 rounded border border-slate-300 px-2 py-1"
           >
-            {lineageOptions.map((lineage) => (
+            {lineageOptions.options.map((lineage) => (
               <option key={lineage} value={lineage}>
                 {lineage}
               </option>
             ))}
+            {lineageOptions.unmatched.length > 0 && (
+              <optgroup label={NOT_IN_DATASET_LABEL}>
+                {lineageOptions.unmatched.map((lineage) => (
+                  <option key={lineage} value={lineage}>
+                    {lineage}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
           <p id="scope-lineages-hint" className="text-xs text-slate-600">
             {`Leave empty to include all ${lineagePlural}. This list covers the whole dataset, not just your date range.`}

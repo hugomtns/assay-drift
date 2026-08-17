@@ -350,6 +350,78 @@ describe('ScopeControls with a selection the option list does not contain', () =
   });
 });
 
+// Task 5.3. `withSelected` keeps a stored selection visible by matching on the
+// exact string, which is right for a user who picked a filter before the list
+// loaded and wrong for a permalink: a link carrying `countries: ["germany"]`
+// -- lower case, a typo, or a value from another dataset -- renders a chip that
+// looks exactly like a real dataset value, the analysis silently returns
+// nothing, and the UI insists the whole time that the filter is legitimate.
+//
+// So a value the loaded list does not contain must be visibly distinguishable
+// from one it does. It must NOT be accused when nothing has loaded, because
+// then there is no evidence either way.
+describe('ScopeControls with a filter value the dataset does not contain', () => {
+  it('separates a value the loaded list does not contain from one it does', async () => {
+    useAppStore.getState().setScope({ countries: ['germany'] });
+    const { transport } = optionTransport({ country: ['Denmark', 'Germany'] });
+    render(<ScopeControls onRun={vi.fn()} transport={transport} />);
+
+    await screen.findByRole('option', { name: 'Germany' });
+    const select = screen.getByLabelText(/country/i);
+    const real = within(select).getByRole('option', { name: 'Germany' });
+    const lookalike = within(select).getByRole('option', { name: 'germany' });
+
+    expect(real.closest('optgroup')).toBeNull();
+    expect(lookalike.closest('optgroup')).toHaveAttribute(
+      'label',
+      expect.stringMatching(/not in this dataset/i),
+    );
+    // Still selected, and still filtering: this marks it, it does not drop it.
+    expect((lookalike as HTMLOptionElement).selected).toBe(true);
+    expect(useAppStore.getState().scope.countries).toEqual(['germany']);
+  });
+
+  it('names the unmatched values in the message region, not only in the listbox', async () => {
+    useAppStore.getState().setScope({ countries: ['germany'], lineages: ['ba.2'] });
+    const { transport } = optionTransport({ country: ['Germany'], pangoLineage: ['BA.2'] });
+    render(<ScopeControls onRun={vi.fn()} transport={transport} />);
+
+    const message = await screen.findByText(/not in the loaded/i);
+    expect(message).toHaveTextContent('germany');
+    expect(message).toHaveTextContent('ba.2');
+    expect(message).toHaveTextContent(/match no sequences/i);
+  });
+
+  it('says nothing while the lists are still loading', () => {
+    // No evidence yet, so no accusation -- and the loading message keeps its
+    // place rather than being replaced by one that would be a guess.
+    useAppStore.getState().setScope({ countries: ['germany'] });
+    const { transport } = pendingTransport();
+    render(<ScopeControls onRun={vi.fn()} transport={transport} />);
+
+    expect(screen.queryByText(/not in this dataset/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/loading the country and Pango lineage lists/i)).toBeInTheDocument();
+    expect(
+      within(screen.getByLabelText(/country/i)).getByRole('option', { name: 'germany' })
+        .closest('optgroup'),
+    ).toBeNull();
+  });
+
+  it('says nothing when the lists failed to load', async () => {
+    useAppStore.getState().setScope({ countries: ['germany'] });
+    render(<ScopeControls onRun={vi.fn()} transport={failingTransport()} />);
+
+    // A failed load is not evidence that a value is absent from the dataset.
+    const notice = await screen.findByText(/could not be loaded/i);
+    expect(notice).toHaveTextContent('germany');
+    expect(notice).not.toHaveTextContent(/not in this dataset/i);
+    expect(
+      within(screen.getByLabelText(/country/i)).getByRole('option', { name: 'germany' })
+        .closest('optgroup'),
+    ).toBeNull();
+  });
+});
+
 // Fix round 1, finding 3. The messages existed but were floating siblings: a
 // screen-reader user who tabbed back to the offending date field was told
 // nothing was wrong with it, and the disabled button gave no reason at all.
