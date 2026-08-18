@@ -113,30 +113,65 @@ non-2xx — an upstream 400, or a fault in the proxy itself — carries `no-stor
 an error at the edge for six hours would outlast the mistake that caused it. This is a
 deliberate addition to the plan's text, not a departure from it.
 
-**OPEN RISK, and the one worth reading twice: a POST may not be edge-cacheable at all.** The
-plan specifies a POST-in, POST-out proxy carrying `s-maxage`. CDNs conventionally cache only
-`GET` and `HEAD`, and Vercel's CDN is believed to be no exception — in which case the
-`Cache-Control` header above is inert, every request still reaches LAPIS, and the proxy buys
-nothing but a hop. This was **not** resolved before shipping: it cannot be settled from this
-machine, because it needs a real deployment and a look at the `x-vercel-cache` response header.
-The two remedies, neither taken here because both change the plan's stated contract:
+### 2026-08-18 — RESOLVED: a POST is not edge-cacheable. The proxy is a GET.
 
-1. Move the request envelope into the query string and make the proxy a `GET`, so the CDN can
-   key on the URL. A LAPIS `advancedQuery` reaches ~700 characters, so the URL stays inside
-   normal limits, but the interface in the plan says POST.
-2. Cache inside the function with `getCache()` from `@vercel/functions`, which is
-   method-agnostic — but that is a new runtime dependency and Global Constraint 12 requires its
-   own entry here and agreement first.
+The entry above shipped with an open risk: that Vercel's CDN might not cache POST, making
+`s-maxage` inert and the proxy a hop that bought nothing. **It was measured against the deployed
+function and the risk was real.** Two identical POSTs to
+`https://assay-drift.vercel.app/api/lapis`:
 
-Until one of those lands, treat the caching claim as unproven. Nothing else about the proxy
-depends on it: the allow-list, the abort plumbing and `responseBytes` are all correct either
-way.
+```
+Cache-Control: public, s-maxage=21600, stale-while-revalidate=86400
+X-Vercel-Cache: MISS      <- first request
+X-Vercel-Cache: MISS      <- second, byte-identical request
+```
 
-**Not verified against a real deployment.** The Vercel CLI is not authenticated on the machine
-this was written on and deploys happen by pushing to `main`. `api/lapis.ts` has been exercised
-only as a plain function against a mocked `Request`/`fetch`. Two things in particular are
-inferences and not observations: that Vercel's Node.js runtime dispatches the exported `POST`
-function for a web-signature handler, and that its builder resolves the extensionless
-`../src/core/registry` TypeScript import from inside `api/`. Both fail loudly (a failed build or
-a 404/500 on the first request) rather than silently, and the direct transport remains one
-environment variable away.
+A cache would have answered HIT. Vercel's CDN does not cache POST, so the header was decoration
+and every request reached LAPIS.
+
+**Remedy taken: option 1 — the envelope moved into the query string and the browser→proxy hop
+became a `GET`.** The upstream hop to LAPIS is still a POST; only the client-facing method
+changed. Option 2 (`getCache()` from `@vercel/functions`) was not taken: it is a new runtime
+dependency, and it was not needed.
+
+Two consequences worth recording, because neither was obvious:
+
+**The URL is now the cache key**, so encoding has to be canonical. `encodeEnvelope` serialises
+the body with sorted object keys — `{country, dateFrom}` and `{dateFrom, country}` must produce
+one URL, or one query becomes two cache entries and neither ever hits, silently. Array order is
+*preserved*, because a list of countries is ordered data as far as LAPIS is concerned and
+sorting it would collapse distinct queries onto one key — the same mistake in the dangerous
+direction.
+
+**A URL has a length limit, and the worst case exceeds it.** Measured, not estimated:
+
+| case | encoded URL |
+|---|---|
+| longest oligo in the bundled library (`who-h5-ha-1201-1387/H5-1387R`) | 1,421 chars |
+| a 60 nt oligo (`MAX_OLIGO_LENGTH`) on a segmented genome, 6 countries + 3 clades | **2,482 chars** |
+
+2,482 is past the 2,083-character floor this project already cites in `permalink.ts`. Nothing in
+the bundled library reaches it, so no library-driven test would have caught it — a user pasting
+a long influenza primer would have. **So the transport sends a GET when the encoded envelope is
+within `MAX_PROXY_URL_LENGTH` (2,000) and falls back to an uncached POST when it is not**, and
+the POST branch sends `no-store` rather than an `s-maxage` that would be ignored. Cache when the
+request fits; stay correct when it does not. The reverse trade would let a rare long oligo
+return numbers for a truncated window.
+
+The POST fallback is a second door into the same function, so it runs the same allow-list —
+asserted by its own test, because a door that skipped it would be an open proxy regardless of
+what the other one does.
+
+**Verified against the real deployment**, unlike the entry above: `GET /api/lapis` returns 200
+with `X-Assay-Drift-Proxy: upstream`, and the body carried `count: 71142` — the Part I.6 G1
+`nScope` figure, fetched through the deployed function.
+
+**One inference from the entry above turned out to be false, and it broke production.** The
+claim was that Vercel's builder would resolve the extensionless `../src/core/registry` import
+from inside `api/`. It does not: Vercel compiles `api/lapis.ts` alone and does not pull `src/`
+along, so every request returned `500 FUNCTION_INVOCATION_FAILED` with
+`ERR_MODULE_NOT_FOUND: /var/task/src/core/registry`. It typechecked, it passed 625 tests, and it
+failed on the first real request — unit tests cannot see the deployment boundary. The allow-list
+is now written out in `api/lapis.ts` with a test asserting it equals `PATHOGENS`, so the single
+source of truth is enforced at test time instead of import time. Type-only imports still cross
+the boundary safely, because `tsc` erases them.

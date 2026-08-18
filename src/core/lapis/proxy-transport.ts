@@ -7,9 +7,11 @@ import type { LapisRequest, LapisResponse, LapisTransport } from './transport';
  *
  * A drop-in for `createFetchTransport`: same `LapisTransport` interface, same
  * `LapisError` on failure, same `responseBytes` on success, same retry
- * behaviour. The only difference is the URL it POSTs to and the envelope it
- * wraps the request in, because the destination has to travel in the body --
- * the proxy checks it against an allow-list before forwarding.
+ * behaviour. The difference is that it GETs `/api/lapis` with the whole request
+ * envelope in the query string, because the destination has to travel with the
+ * request -- the proxy checks it against an allow-list before forwarding -- and
+ * because a GET is the only thing Vercel's CDN will cache. That was measured
+ * against the deployed function, not assumed; see `api/lapis.ts`.
  */
 
 /**
@@ -52,6 +54,80 @@ const defaultSleep = (ms: number): Promise<void> =>
 /** Where the Vercel Function is mounted. `api/lapis.ts` -> `/api/lapis`. */
 export const DEFAULT_PROXY_PATH = '/api/lapis';
 
+/**
+ * JSON with object keys in a fixed order, so that two structurally identical
+ * bodies always produce the same text.
+ *
+ * The same idea as `stableStringify` in `caching-transport.ts`, and needed here
+ * for a sharper reason: **this text goes into the URL, and the URL is the CDN
+ * cache key.** If key order leaked into it, `{country, dateFrom}` and
+ * `{dateFrom, country}` would be two cache entries for one query and neither
+ * would ever hit -- the caching this proxy exists for would silently not happen,
+ * with no error anywhere to notice.
+ *
+ * Arrays keep their order. A list of countries is ordered data, not a set, and
+ * two different orders are two different queries as far as LAPIS is concerned;
+ * sorting them here would collapse distinct requests onto one key, which is the
+ * dangerous direction of the same mistake.
+ */
+function stableJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  );
+  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableJson(v)}`).join(',')}}`;
+}
+
+/**
+ * The proxy URL for one request: the whole envelope in the query string.
+ *
+ * Exported so the encoder can be tested directly, and so the round-trip test
+ * can run it against the handler's decoder. Encoder and decoder are written in
+ * separate files and deployed as separate artefacts, so that test is the only
+ * place they meet.
+ *
+ * `URLSearchParams` percent-encodes, so a filter value containing `&`, `#` or a
+ * non-ASCII character -- "Côte d'Ivoire" is a real country in this dataset --
+ * survives the trip intact.
+ */
+export function encodeEnvelope(
+  path: string,
+  envelope: { baseUrl: string; endpoint: string; body: unknown },
+): string {
+  const search = new URLSearchParams();
+  search.set('baseUrl', envelope.baseUrl);
+  search.set('endpoint', envelope.endpoint);
+  search.set('body', stableJson(envelope.body));
+  return `${path}?${search.toString()}`;
+}
+
+/**
+ * Above this many characters the envelope goes in a POST body instead.
+ *
+ * The GET form is what makes the proxy cacheable, so it is the default and the
+ * common case: the longest envelope any oligo in the bundled library produces is
+ * about 1,400 characters, comfortably inside this.
+ *
+ * But a user can paste an oligo up to `MAX_OLIGO_LENGTH` (60 nt), and a 60 nt
+ * oligo on a segmented genome with a wide filter set measures **2,482
+ * characters** -- past the 2,083-character limit that is the conservative floor
+ * across HTTP clients and intermediaries. A URL that long is not reliably
+ * *wrong*, it is reliably *unpredictable*, which is worse: it would work in
+ * development and truncate somewhere in the middle of a query expression on
+ * someone else's network.
+ *
+ * So the rule is: **cache when the request fits, stay correct when it does not.**
+ * The fallback POST is uncached and says so in its own headers. Trading a cache
+ * hit for a guaranteed-intact query is the right way round; the reverse would
+ * make a rare long oligo silently return numbers for a different window.
+ *
+ * 2,000 rather than 2,083 so the boundary is a round number a reader can hold,
+ * with the remaining 83 characters as margin for a path prefix this code does
+ * not control.
+ */
+export const MAX_PROXY_URL_LENGTH = 2000;
+
 export function createProxyTransport(
   opts: {
     path?: string;
@@ -70,18 +146,30 @@ export function createProxyTransport(
       let attempt = 0;
 
       for (;;) {
-        const res = await doFetch(path, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify({
-            baseUrl: req.baseUrl,
-            endpoint: req.endpoint,
-            body: req.body,
-          }),
-          // Global Constraint 10. Spread rather than set, because
-          // `exactOptionalPropertyTypes` distinguishes absent from undefined.
-          ...(req.signal ? { signal: req.signal } : {}),
-        });
+        const envelope = { baseUrl: req.baseUrl, endpoint: req.endpoint, body: req.body };
+        const url = encodeEnvelope(path, envelope);
+
+        // Global Constraint 10. Spread rather than set, because
+        // `exactOptionalPropertyTypes` distinguishes absent from undefined.
+        const signal = req.signal ? { signal: req.signal } : {};
+
+        const res =
+          url.length <= MAX_PROXY_URL_LENGTH
+            ? // A GET, so the CDN will cache it; a POST would not be. No body:
+              // the envelope is in the URL, which is also the cache key.
+              await doFetch(url, {
+                method: 'GET',
+                headers: { Accept: 'application/json' },
+                ...signal,
+              })
+            : // Too long to put in a URL. Uncached, but intact -- see
+              // MAX_PROXY_URL_LENGTH for why that is the right trade.
+              await doFetch(path, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify(envelope),
+                ...signal,
+              });
 
         if (res.ok) {
           // `res.text()` then `JSON.parse`, exactly as `createFetchTransport`

@@ -171,27 +171,26 @@ interface Deps {
 }
 
 /**
- * Vercel dispatches this for `POST /api/lapis`.
+ * The three envelope fields, however they arrived.
  *
- * The second parameter is for tests only. Vercel passes at most a context
- * object there, which has no `fetchImpl`, so the global `fetch` is used in
- * production either way.
+ * `GET` reads them from the query string and `POST` from a JSON body, and from
+ * here on the two are indistinguishable: the same allow-list, the same
+ * validation, the same upstream call. Only the caching differs, and that is the
+ * caller's problem, not this function's.
  */
-export async function POST(request: Request, deps: Deps = {}): Promise<Response> {
-  const doFetch = deps.fetchImpl ?? globalThis.fetch.bind(globalThis);
+interface Envelope {
+  baseUrl: unknown;
+  endpoint: unknown;
+  body: unknown;
+}
 
-  let payload: unknown;
-  try {
-    payload = await request.json();
-  } catch {
-    return fault(400, 'Bad Request', 'request body is not valid JSON');
-  }
-
-  if (!isPlainObject(payload)) {
-    return fault(400, 'Bad Request', 'request body must be a JSON object');
-  }
-
-  const { baseUrl, endpoint, body } = payload;
+async function forward(
+  envelope: Envelope,
+  request: Request,
+  doFetch: typeof fetch,
+  cacheable: boolean,
+): Promise<Response> {
+  const { baseUrl, endpoint, body } = envelope;
 
   if (!isAllowedBaseUrl(baseUrl)) {
     return fault(
@@ -201,11 +200,7 @@ export async function POST(request: Request, deps: Deps = {}): Promise<Response>
     );
   }
   if (!isEndpoint(endpoint)) {
-    return fault(
-      400,
-      'Bad Request',
-      `endpoint must be one of: ${ALLOWED_ENDPOINTS.join(', ')}`,
-    );
+    return fault(400, 'Bad Request', `endpoint must be one of: ${ALLOWED_ENDPOINTS.join(', ')}`);
   }
   if (!isPlainObject(body)) {
     return fault(400, 'Bad Request', 'body must be a JSON object of LAPIS filters');
@@ -234,8 +229,89 @@ export async function POST(request: Request, deps: Deps = {}): Promise<Response>
     status: upstream.status,
     headers: {
       'Content-Type': upstream.headers.get('Content-Type') ?? 'application/json',
-      'Cache-Control': upstream.ok ? CACHE_CONTROL : 'no-store',
+      'Cache-Control': cacheable && upstream.ok ? CACHE_CONTROL : 'no-store',
       [SOURCE_HEADER]: 'upstream',
     },
   });
+}
+
+/**
+ * The POST form, kept for requests too long to put in a URL.
+ *
+ * It is **not cacheable** -- that is the measured fact this whole route was
+ * reshaped around -- so it sends `no-store` rather than a `s-maxage` that would
+ * be silently ignored. A header claiming a cache that does not exist is worse
+ * than no header, because the next person to read it believes it.
+ *
+ * The client only reaches here when the encoded envelope exceeds
+ * `MAX_PROXY_URL_LENGTH`, which needs an oligo near the 60 nt input limit on a
+ * segmented genome with a wide filter set. It is rare, and it is correct rather
+ * than fast.
+ */
+export async function POST(request: Request, deps: Deps = {}): Promise<Response> {
+  const doFetch = deps.fetchImpl ?? globalThis.fetch.bind(globalThis);
+
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch {
+    return fault(400, 'Bad Request', 'request body is not valid JSON');
+  }
+  if (!isPlainObject(payload)) {
+    return fault(400, 'Bad Request', 'request body must be a JSON object');
+  }
+
+  return forward(payload as unknown as Envelope, request, doFetch, false);
+}
+
+/**
+ * Vercel dispatches this for `GET /api/lapis`.
+ *
+ * **A GET, and the reason is measured rather than assumed.** This was a POST
+ * first, exactly as the plan specified, and the deployed function answered two
+ * identical requests with `X-Vercel-Cache: MISS` both times while carrying
+ * `s-maxage=21600` on the response. Vercel's CDN does not cache POST, so the
+ * header was inert: every request reached LAPIS and the proxy bought a hop and
+ * no cache, which was the whole reason it exists. The envelope is unchanged; it
+ * travels in the query string now, and **the URL is therefore the cache key** --
+ * see `encodeEnvelope` in `proxy-transport.ts` for why key order must not leak
+ * into it.
+ *
+ * The hop upstream to LAPIS is still a POST. Only the browser-to-proxy hop
+ * changed.
+ *
+ * Everything arrives as a string, so `body` is JSON *text* and has to be parsed
+ * before it can be checked. The rejection order is deliberate: the allow-list
+ * runs first, so a request naming a host we will not talk to is refused before
+ * anything else about it is considered.
+ *
+ * The second parameter is for tests only. Vercel passes at most a context
+ * object there, which has no `fetchImpl`, so the global `fetch` is used in
+ * production either way.
+ */
+export async function GET(request: Request, deps: Deps = {}): Promise<Response> {
+  const doFetch = deps.fetchImpl ?? globalThis.fetch.bind(globalThis);
+
+  const params = new URL(request.url).searchParams;
+  const bodyText = params.get('body');
+
+  // Parsed here rather than in `forward`, because only the GET form has to turn
+  // text back into a value. Text that is not JSON and JSON that is not an
+  // object of filters are equally unusable, so both fall through to the same
+  // rejection inside `forward` -- as `null`, which is not a plain object.
+  let body: unknown = null;
+  if (bodyText !== null) {
+    try {
+      body = JSON.parse(bodyText);
+    } catch {
+      body = null;
+    }
+  }
+
+  return forward(
+    { baseUrl: params.get('baseUrl'), endpoint: params.get('endpoint'), body },
+    request,
+    doFetch,
+    true,
+  );
 }
