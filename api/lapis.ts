@@ -1,4 +1,3 @@
-import { PATHOGENS } from '../src/core/registry';
 import type { LapisEndpoint } from '../src/core/lapis/transport';
 
 /**
@@ -22,9 +21,11 @@ import type { LapisEndpoint } from '../src/core/lapis/transport';
  * could make our server POST an arbitrary body to an arbitrary host, with our
  * IP and our egress. Three rules follow, and each has a test:
  *
- * 1. The list is **derived from `PATHOGENS`**, never retyped. Adding a pathogen
- *    to the registry cannot leave the proxy silently refusing it, and a typo in
- *    a hand-copied string cannot open a hole.
+ * 1. The list is **kept equal to `PATHOGENS` by a test**, not by an import --
+ *    see `ALLOWED_LAPIS_BASE_URLS` below for why the import could not survive
+ *    deployment. Adding a pathogen to the registry without adding it here fails
+ *    the suite, so the proxy cannot silently refuse a configured instance, and
+ *    a typo in either copy cannot open a hole.
  * 2. Matching is on **parsed `URL` origin equality plus a segment-boundary path
  *    prefix**, never a substring. `startsWith` on the raw string would accept
  *    `https://lapis.cov-spectrum.org.evil.test/open/v2`.
@@ -33,8 +34,11 @@ import type { LapisEndpoint } from '../src/core/lapis/transport';
  *
  * ## What is not verified
  *
- * This function has never run on Vercel. It has been exercised only as a plain
- * function against a mocked `Request` and a mocked `fetch`.
+ * The unit tests exercise this as a plain function against a mocked `Request`
+ * and a mocked `fetch`. They cannot see the deployment boundary, and the first
+ * deploy proved it: everything passed and every request 500'd on a missing
+ * module. Whether a POST response is edge-cacheable at all is measured against
+ * the deployed function, not asserted here -- see `docs/decisions.md`.
  */
 
 /**
@@ -49,15 +53,28 @@ const ALLOWED_ENDPOINTS: readonly LapisEndpoint[] = [
 ];
 
 /**
- * The three configured LAPIS instances, derived from the registry.
+ * The three configured LAPIS instances.
  *
- * Exported so a test can assert what is on it. The test retypes the three
- * strings deliberately -- a test that re-derived them would assert nothing and
- * would not notice the derivation widening.
+ * These are written out rather than derived from `PATHOGENS`, and that is a
+ * deployment constraint rather than a preference. Vercel compiles this file to
+ * `/var/task/api/lapis.js` on its own; it does **not** pull `src/` along, so a
+ * value import of `../src/core/registry` resolves at build time, typechecks,
+ * passes every test, and then throws `ERR_MODULE_NOT_FOUND` on the first real
+ * request. That is exactly what shipping it did. The type-only import above
+ * survives because tsc erases it.
+ *
+ * The single source of truth is preserved at **test** time instead of import
+ * time: `proxy-transport.test.ts` asserts this list equals
+ * `Object.values(PATHOGENS).map(p => p.lapisBaseUrl)`, so adding a pathogen to
+ * the registry without adding it here fails the suite. That test also retypes
+ * the three strings a second time, so the check cannot pass by both sides
+ * drifting together.
  */
-export const ALLOWED_LAPIS_BASE_URLS: readonly string[] = Object.freeze(
-  Object.values(PATHOGENS).map((p) => p.lapisBaseUrl),
-);
+export const ALLOWED_LAPIS_BASE_URLS: readonly string[] = Object.freeze([
+  'https://lapis.cov-spectrum.org/open/v2',
+  'https://lapis.genspectrum.org/h5n1',
+  'https://lapis.genspectrum.org/h3n2',
+]);
 
 /** `{ origin, path }` with a normalised, slash-free-at-the-end path. */
 interface Allowed {
