@@ -21,7 +21,8 @@
     "refs": "tsx scripts/fetch-references.ts",
     "verify:assays": "tsx scripts/verify-assays.ts",
     "verify:golden": "tsx scripts/check-golden-drift.ts",
-    "fixtures": "tsx scripts/record-fixtures.ts"
+    "fixtures": "tsx scripts/record-fixtures.ts",
+    "verify:deploy": "tsx scripts/verify-deployment.ts"
   },
   "dependencies": {
     "react": "^19.2.8",

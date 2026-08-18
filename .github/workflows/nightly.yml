@@ -48,6 +48,42 @@ jobs:
           } > body.md
           bash .github/open-or-update-issue.sh body.md
 
+  deployment:
+    name: Deployed site
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      # Checks the live origin, not a build artefact: the copy the product may
+      # not ship without, the framings it may not ship with, and the proxy --
+      # which no bundle check can see. The first Phase 6 deploy shipped a
+      # perfectly good bundle in front of a function that 500'd on every
+      # request, and nothing in this repo would have noticed.
+      - id: deploy
+        run: npm run verify:deploy
+      - name: Open or update the deployment issue
+        if: failure() && steps.deploy.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: 'Nightly: the deployed site is failing its checks'
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "\`npm run verify:deploy\` failed against https://assay-drift.vercel.app."
+            echo
+            echo "This checks the live origin rather than a build: required copy present,"
+            echo "forbidden framings absent, and the /api/lapis proxy answering, caching"
+            echo "and rejecting off-allow-list hosts. The run log says which check failed."
+            echo
+            echo "Run: $RUN_URL"
+          } > body.md
+          bash .github/open-or-update-issue.sh body.md
+
   golden-drift:
     name: Golden drift
     runs-on: ubuntu-latest
