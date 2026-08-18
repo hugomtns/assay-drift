@@ -1,4 +1,3 @@
-import { useId } from 'react';
 import type { WindowInsertion } from '../../core/analysis/insertions';
 import { formatCount, formatPercent } from '../format';
 
@@ -6,6 +5,13 @@ interface InsertionNoteProps {
   insertions: WindowInsertion[];
   /** The window's full-coverage denominator, borrowed for these fractions. */
   denominator: number;
+  /**
+   * The oligo whose binding site these insertions sit in. Required for the
+   * same reason as `AttributionTable`'s: one of these renders per oligo, and
+   * several regions sharing one name is a landmark list that navigates
+   * nowhere.
+   */
+  oligoName: string;
 }
 
 /**
@@ -28,13 +34,12 @@ interface InsertionNoteProps {
  * percentage computed from the mutations endpoint would produce a number with
  * no coherent meaning at all.
  */
-export function InsertionNote({ insertions, denominator }: InsertionNoteProps) {
-  const headingId = useId();
+export function InsertionNote({ insertions, denominator, oligoName }: InsertionNoteProps) {
   if (insertions.length === 0) return null;
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-2">
-      <h4 id={headingId} className="text-base font-semibold text-slate-900">
+    <section aria-label={`Insertions in this binding site: ${oligoName}`} className="flex flex-col gap-2">
+      <h4 className="text-base font-semibold text-slate-900">
         Insertions in this binding site
       </h4>
 

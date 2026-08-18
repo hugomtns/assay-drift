@@ -7,6 +7,29 @@ import { loadReference } from '../../data/references';
 import { reverseComplement } from '../../core/iupac';
 import type { OligoInput } from '../../core/oligo-input';
 
+/**
+ * The wizard's advance buttons are `aria-disabled`, not `disabled` (Task 6.2,
+ * requirement 2). `disabled` removed them from the tab order, so a keyboard
+ * user never met the control and was never told why the step would not
+ * advance; `aria-disabled` keeps them focusable and announced as disabled,
+ * and the click handler refuses to act.
+ *
+ * jest-dom's `toBeDisabled()` ignores `aria-disabled` entirely, so leaving it
+ * here would not fail -- it would quietly report every blocked button as
+ * enabled and stop testing anything. These two helpers replace it, and they
+ * assert more than it did: still reachable, and carrying a reason.
+ */
+const expectBlocked = (el: HTMLElement): void => {
+  expect(el).toHaveAttribute('aria-disabled', 'true');
+  expect(el).not.toBeDisabled();
+  expect(el).toHaveAccessibleDescription(/\S/);
+};
+
+const expectActionable = (el: HTMLElement): void => {
+  expect(el).not.toHaveAttribute('aria-disabled', 'true');
+  expect(el).not.toBeDisabled();
+};
+
 const seed = (sequence: string, name = 'Test-F') => {
   useAppStore.getState().reset();
   useAppStore.getState().setOligos([{ id: 'oligo-0', name, role: 'forward', sequence }]);
@@ -48,7 +71,7 @@ describe('BindingResolution', () => {
     const radios = await screen.findAllByRole('radio');
     expect(radios.length).toBeGreaterThan(1);
     expect(radios.every((r) => !(r as HTMLInputElement).checked)).toBe(true);
-    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
+    expectBlocked(screen.getByRole('button', { name: /continue/i }));
   });
 
   it('reports no hit rather than showing a wrong location', async () => {
@@ -63,9 +86,9 @@ describe('BindingResolution', () => {
     seed('TACATGTCTCTGGGACCANNNN');
     render(<BindingResolution />);
     const confirm = await screen.findByRole('checkbox', { name: /confirm this site/i });
-    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
+    expectBlocked(screen.getByRole('button', { name: /continue/i }));
     await userEvent.click(confirm);
-    expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled();
+    expectActionable(screen.getByRole('button', { name: /continue/i }));
   });
 });
 
@@ -90,7 +113,7 @@ describe('BindingResolution: contract with the rest of the app', () => {
     render(<BindingResolution />);
     const warnings = await screen.findByLabelText('Geometry warnings');
     expect(warnings.textContent).toMatch(/downstream/i);
-    expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled();
+    expectActionable(screen.getByRole('button', { name: /continue/i }));
   });
 
   it('writes the resolution and the auto-chosen site into the store', async () => {
@@ -120,7 +143,7 @@ describe('BindingResolution: contract with the rest of the app', () => {
     await userEvent.click(radios[3]!);
     expect(useAppStore.getState().chosenSites['oligo-0']).toBeDefined();
     expect((radios[3] as HTMLInputElement).checked).toBe(true);
-    expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled();
+    expectActionable(screen.getByRole('button', { name: /continue/i }));
     expect(screen.getAllByRole('img')).toHaveLength(1);
   });
 });
@@ -142,10 +165,10 @@ describe('BindingResolution: retracted confirmations', () => {
 
     await userEvent.click(confirm);
     expect(screen.getAllByRole('img')).toHaveLength(1);
-    expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled();
+    expectActionable(screen.getByRole('button', { name: /continue/i }));
 
     await userEvent.click(confirm);
-    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
+    expectBlocked(screen.getByRole('button', { name: /continue/i }));
     expect(screen.queryAllByRole('img')).toHaveLength(0);
     expect(screen.getByText(/map appears once a site has been chosen/i)).toBeInTheDocument();
   });
@@ -235,10 +258,10 @@ describe('BindingResolution: what leaving the step writes to the store', () => {
     const confirm = await screen.findByRole('checkbox', { name: /confirm this site/i });
 
     await userEvent.click(confirm);
-    expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled();
+    expectActionable(screen.getByRole('button', { name: /continue/i }));
 
     await userEvent.click(confirm);
-    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
+    expectBlocked(screen.getByRole('button', { name: /continue/i }));
     // The store still holds the retracted site; nothing on screen counts it.
     expect(useAppStore.getState().chosenSites['oligo-1']).toBeDefined();
     expect(useAppStore.getState().step).toBe('input');
@@ -271,11 +294,11 @@ describe('BindingResolution: confirmation identity', () => {
     const confirm = screen.getByRole('checkbox', { name: /confirm this site/i });
     await userEvent.click(confirm);
     expect(confirm).toBeChecked();
-    expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled();
+    expectActionable(screen.getByRole('button', { name: /continue/i }));
 
     await userEvent.click(radios[1]!);
     expect(screen.getByRole('checkbox', { name: /confirm this site/i })).not.toBeChecked();
-    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
+    expectBlocked(screen.getByRole('button', { name: /continue/i }));
   });
 });
 

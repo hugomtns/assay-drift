@@ -1,20 +1,10 @@
 import { SEVERITY_DISCLAIMER } from '../../core/analysis/constants';
 import type { OligoRole } from '../../core/oligo-input';
 import type { Severity, SeverityLevel } from '../../core/analysis/severity';
-
-/**
- * The four words, fixed by the project's copy rules. Not Low/Medium/High,
- * which reads as a measured quantity; not Pass/Fail, which is a verdict on an
- * assay this tool has never seen run. Each one names what the reader should
- * *do*, which is the only thing a heuristic over sequence counts is entitled
- * to suggest.
- */
-const LEVEL_LABELS: Readonly<Record<SeverityLevel, string>> = {
-  green: 'Fine',
-  amber: 'Watch',
-  red: 'Act on',
-  unknown: 'Not enough data',
-};
+// The four words live one module over because the live region that announces
+// a finished run says the same word, and two copies would be two things to
+// keep true.
+import { SEVERITY_LABELS } from './severity-labels';
 
 /**
  * Colour is never the only cue (WCAG 1.4.1): every level carries its word and
@@ -102,7 +92,7 @@ export function SeverityBadge({ severity, role }: SeverityBadgeProps) {
         className={`flex w-fit items-center gap-2 rounded border px-3 py-1 text-sm font-semibold ${LEVEL_STYLES[severity.level]}`}
       >
         <LevelIcon level={severity.level} />
-        <span>{LEVEL_LABELS[severity.level]}</span>
+        <span>{SEVERITY_LABELS[severity.level]}</span>
       </p>
 
       {severity.reasons.length > 0 && (

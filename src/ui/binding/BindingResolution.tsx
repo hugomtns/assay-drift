@@ -24,6 +24,9 @@ const STATUS_LABELS: Readonly<Record<Resolution['status'], string>> = {
 
 const siteKey = (site: BindingSite) => `${site.segment}:${site.start}-${site.end}:${site.strand}`;
 
+/** The always-mounted region carrying the reason `Continue` will not advance. */
+const CONTINUE_BLOCKED_ID = 'binding-continue-blocked';
+
 /**
  * The one place a coordinate is written out. 1-based inclusive on the
  * reference's plus strand for both strands (Global Constraint 3), which the
@@ -273,6 +276,22 @@ export function BindingResolution() {
   const canContinue = rows.length > 0 && rows.every((row) => row.committed !== null);
 
   /**
+   * Why `Continue` will not advance, or `''` when it will.
+   *
+   * The button is `aria-disabled` rather than `disabled` (Task 6.2), so it
+   * stays in the tab order -- which is only an improvement if focusing it
+   * says something. Naming the oligos is the point: with several on screen,
+   * "some site is missing" leaves the user hunting for which one.
+   */
+  const unplaced = rows.filter((row) => row.committed === null).map((row) => row.oligo.name);
+  const blockedReason =
+    rows.length === 0
+      ? 'There are no oligos to place. Go back to step 1 and add some.'
+      : unplaced.length > 0
+        ? `Every oligo needs a binding site you have agreed to before this step can continue. Still waiting on: ${unplaced.join(', ')}.`
+        : '';
+
+  /**
    * The one write that makes the store agree with the screen.
    *
    * Up to this point `chosenSites` is a superset of what the user agreed to:
@@ -393,11 +412,26 @@ export function BindingResolution() {
         )}
       </section>
 
+      {/*
+        Always mounted with its text swapped in, like every other message
+        region in this app: a live region inserted at the same instant as its
+        text is frequently never announced, and `aria-describedby` must not
+        point at an id that is absent from the document half the time.
+      */}
+      <p id={CONTINUE_BLOCKED_ID} role="status" className="text-sm text-slate-700">
+        {blockedReason}
+      </p>
+
       <button
         type="button"
-        disabled={!canContinue}
-        onClick={handleContinue}
-        className="self-start rounded bg-slate-900 px-4 py-2 text-white disabled:bg-slate-300"
+        aria-disabled={!canContinue}
+        aria-describedby={canContinue ? undefined : CONTINUE_BLOCKED_ID}
+        onClick={() => {
+          if (canContinue) handleContinue();
+        }}
+        className={`self-start rounded px-4 py-2 ${
+          canContinue ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-700'
+        }`}
       >
         Continue
       </button>

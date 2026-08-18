@@ -13,12 +13,12 @@ const insertion = (over: Partial<WindowInsertion> = {}): WindowInsertion => ({
 
 describe('InsertionNote', () => {
   it('renders nothing when there are no insertions', () => {
-    const { container } = render(<InsertionNote insertions={[]} denominator={70387} />);
+    const { container } = render(<InsertionNote insertions={[]} denominator={70387} oligoName="N1-F" />);
     expect(container.firstChild).toBeNull();
   });
 
   it('names the position, the inserted bases and the count', () => {
-    render(<InsertionNote insertions={[insertion()]} denominator={70387} />);
+    render(<InsertionNote insertions={[insertion()]} denominator={70387} oligoName="N1-F" />);
     const item = screen.getByRole('listitem');
     expect(item).toHaveTextContent('21,765');
     expect(item).toHaveTextContent('GAT');
@@ -26,13 +26,13 @@ describe('InsertionNote', () => {
   });
 
   it('states that the insertion endpoint reports no coverage', () => {
-    render(<InsertionNote insertions={[insertion()]} denominator={70387} />);
+    render(<InsertionNote insertions={[insertion()]} denominator={70387} oligoName="N1-F" />);
     const explanation = screen.getByText(/no coverage/);
     expect(explanation).toHaveTextContent(/approximate/i);
   });
 
   it('shows the denominator alongside the fraction', () => {
-    render(<InsertionNote insertions={[insertion()]} denominator={70387} />);
+    render(<InsertionNote insertions={[insertion()]} denominator={70387} oligoName="N1-F" />);
     expect(screen.getByRole('listitem')).toHaveTextContent('70,387');
   });
 });

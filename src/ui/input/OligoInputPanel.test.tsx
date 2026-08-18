@@ -4,6 +4,29 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { OligoInputPanel } from './OligoInputPanel';
 import { useAppStore } from '../../state/store';
 
+/**
+ * The wizard's advance buttons are `aria-disabled`, not `disabled` (Task 6.2,
+ * requirement 2). `disabled` removed them from the tab order, so a keyboard
+ * user never met the control and was never told why the step would not
+ * advance; `aria-disabled` keeps them focusable and announced as disabled,
+ * and the click handler refuses to act.
+ *
+ * jest-dom's `toBeDisabled()` ignores `aria-disabled` entirely, so leaving it
+ * here would not fail -- it would quietly report every blocked button as
+ * enabled and stop testing anything. These two helpers replace it, and they
+ * assert more than it did: still reachable, and carrying a reason.
+ */
+const expectBlocked = (el: HTMLElement): void => {
+  expect(el).toHaveAttribute('aria-disabled', 'true');
+  expect(el).not.toBeDisabled();
+  expect(el).toHaveAccessibleDescription(/\S/);
+};
+
+const expectActionable = (el: HTMLElement): void => {
+  expect(el).not.toHaveAttribute('aria-disabled', 'true');
+  expect(el).not.toBeDisabled();
+};
+
 beforeEach(() => { useAppStore.getState().reset(); });
 
 const type = async (text: string) => {
@@ -46,9 +69,9 @@ describe('OligoInputPanel', () => {
     render(<OligoInputPanel />);
     await type('ACGTACGTACGTACGTACGT');
     const button = await screen.findByRole('button', { name: /continue/i });
-    expect(button).toBeDisabled();
+    expectBlocked(button);
     await userEvent.selectOptions(screen.getByLabelText(/role for Oligo 1/i), 'forward');
-    expect(button).toBeEnabled();
+    expectActionable(button);
   });
 
   // Regression test (added post-review, not part of the brief's verbatim five):
@@ -179,7 +202,7 @@ describe('OligoInputPanel', () => {
     expect(useAppStore.getState().roles['oligo-0']).toBeUndefined();
     expect(screen.getByLabelText(/role for Oligo 1/i)).toHaveValue('');
     expect(screen.getByText(/choose a role/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
+    expectBlocked(screen.getByRole('button', { name: /continue/i }));
   });
 
   // Regression test (added post-review, invariant 4 -- growth): inserting a
@@ -223,7 +246,7 @@ describe('OligoInputPanel', () => {
     // survives -- reapplied at its new position.
     expect(useAppStore.getState().roles['oligo-2']).toBe('probe');
     expect(screen.getAllByText(/choose a role/i)).toHaveLength(3);
-    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
+    expectBlocked(screen.getByRole('button', { name: /continue/i }));
   });
 
   // Forward-pointer A (Task 4.2 -> 4.7). The store commit is debounced, so for
@@ -316,6 +339,6 @@ describe('OligoInputPanel', () => {
     expect(useAppStore.getState().roles['oligo-0']).toBe('probe');
     expect(screen.getByLabelText(/role for Oligo 1/i)).toHaveValue('probe');
     expect(screen.queryByText(/choose a role/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled();
+    expectActionable(screen.getByRole('button', { name: /continue/i }));
   });
 });

@@ -92,14 +92,23 @@ export function CaveatPanel({ result }: CaveatPanelProps) {
       {diagnostics.length > 0 && (
         <div className="flex flex-col gap-2">
           <h3 className="text-base font-semibold">About this particular analysis</h3>
+          {/*
+            The severity of a diagnostic used to be an amber text colour and
+            nothing else -- invisible in greyscale, invisible to a screen
+            reader, and invisible to anyone who cannot separate amber-900 from
+            slate-700. WCAG 1.4.1: colour is never the only carrier. The word
+            goes in front of the message, so the distinction survives being
+            printed, read aloud, or pasted into an email as plain text.
+          */}
           <ul className="flex list-disc flex-col gap-2 pl-5 text-sm">
             {diagnostics.map((diagnostic) => (
               <li
                 key={diagnostic.id}
-                className={
-                  diagnostic.severity === 'warn' ? 'text-amber-900' : 'text-slate-700'
-                }
+                className={diagnostic.severity === 'warn' ? 'text-amber-900' : 'text-slate-700'}
               >
+                <span className="font-semibold">
+                  {diagnostic.severity === 'warn' ? 'Warning: ' : 'Note: '}
+                </span>
                 {diagnostic.message}
               </li>
             ))}

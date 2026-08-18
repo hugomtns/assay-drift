@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { PositionProfile } from './PositionProfile';
 import type { OligoAnalysis } from '../../core/analysis/run';
@@ -15,13 +15,31 @@ const analysis = (profile: PositionStat[], role: 'forward' | 'probe' = 'forward'
   ({ name: 'N1-F', role, sequence: profile.map((p) => p.oligoBase).join(''), profile } as unknown as OligoAnalysis);
 
 describe('PositionProfile', () => {
-  it('renders one bar per position with an accessible description', () => {
+  // Task 6.2, requirement 3: the numbers left the per-column `role="img"`
+  // labels and moved into a visually hidden table. The bars are now
+  // `aria-hidden`, so this reads the table -- the only place a screen reader
+  // can now reach the profile, and the one that gained column headers and the
+  // ability to compare two positions.
+  it('tabulates one row per position with the counts behind each rate', () => {
     render(<PositionProfile analysis={analysis([
       stat({ refPos: 21765, mismatchCount: 67469, deletionCount: 67469, mismatchFraction: 0.9576 }),
       stat({ refPos: 21766, oligoIndex: 1, distanceFrom3Prime: 20 }),
     ])} />);
-    expect(screen.getByLabelText(/position 21,?765.*95\.8\s*%.*67,?469.*70,?454/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/position 21,?766.*0(\.0)?\s*%/)).toBeInTheDocument();
+    const table = screen.getByRole('table');
+    expect(within(table).getAllByRole('row')).toHaveLength(3);
+
+    const first = within(table).getByRole('row', { name: /21,765/ });
+    expect(first).toHaveTextContent(/95\.8\s*%/);
+    expect(first).toHaveTextContent(/67,469/);
+    expect(first).toHaveTextContent(/70,454/);
+    expect(within(table).getByRole('row', { name: /21,766/ })).toHaveTextContent(/0(\.0)?\s*%/);
+  });
+
+  it('hides the drawn columns from assistive technology so nothing is said twice', () => {
+    const { container } = render(<PositionProfile analysis={analysis([stat({})])} />);
+    for (const svg of container.querySelectorAll('svg')) {
+      expect(svg.closest('[aria-hidden="true"]')).not.toBeNull();
+    }
   });
 
   it('marks the 3prime terminal region for primers', () => {
@@ -61,9 +79,11 @@ describe('PositionProfile', () => {
     render(<PositionProfile analysis={analysis([
       stat({ refPos: 21765, refBase: 'N', plusStrandBase: 'N', referenceIsAmbiguous: true }),
     ])} />);
-    const mark = screen.getByLabelText(/position 21,?765/);
-    expect(mark).toHaveAccessibleName(/not assessable/i);
-    expect(mark).toHaveAccessibleName(expect.not.stringContaining('%'));
+    const row = within(screen.getByRole('table')).getByRole('row', { name: /21,765/ });
+    expect(row).toHaveTextContent(/not assessable/i);
+    // Not `0.0%`, not `0%`: the position was never queried, so any rate here
+    // would state the site is conserved somewhere we cannot see at all.
+    expect(row.textContent).not.toContain('%');
     expect(screen.getByTitle(/reference base is ambiguous/i)).toBeInTheDocument();
   });
 });

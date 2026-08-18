@@ -1,10 +1,20 @@
-import { useId } from 'react';
 import type { Attribution } from '../../core/analysis/attribution';
 import { formatCount, formatPercent } from '../format';
 
 interface AttributionTableProps {
   attribution: Attribution;
   label: string;
+  /**
+   * The oligo whose binding site these shares are about.
+   *
+   * Required, not optional. A results page renders two of these per oligo, so
+   * with three oligos the page would otherwise carry six regions called
+   * "Pango lineage" and "Country" -- a landmark list of duplicates that
+   * navigates nowhere (axe `landmark-unique`, and a real dead end before it
+   * is a rule). The name is part of what this table is, so a caller must
+   * supply it rather than fall back to something anonymous.
+   */
+  oligoName: string;
 }
 
 /**
@@ -25,15 +35,15 @@ interface AttributionTableProps {
  * is a fact about the metadata rather than about the variant, and folding it
  * into `other` would hide that.
  */
-export function AttributionTable({ attribution, label }: AttributionTableProps) {
-  const headingId = useId();
+export function AttributionTable({ attribution, label, oligoName }: AttributionTableProps) {
+  const regionLabel = `${label}: ${oligoName}`;
   const { rows, otherCount, unassignedCount, total } = attribution;
   const shareOf = (count: number) => (total === 0 ? 0 : count / total);
 
   if (rows.length === 0 && otherCount === 0 && unassignedCount === 0) {
     return (
-      <section aria-labelledby={headingId} className="flex flex-col gap-2">
-        <h4 id={headingId} className="text-base font-semibold text-slate-900">
+      <section aria-label={regionLabel} className="flex flex-col gap-2">
+        <h4 className="text-base font-semibold text-slate-900">
           {label}
         </h4>
         <p className="text-sm text-slate-700">
@@ -44,8 +54,8 @@ export function AttributionTable({ attribution, label }: AttributionTableProps) 
   }
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-2">
-      <h4 id={headingId} className="text-base font-semibold text-slate-900">
+    <section aria-label={regionLabel} className="flex flex-col gap-2">
+      <h4 className="text-base font-semibold text-slate-900">
         {label}
       </h4>
 

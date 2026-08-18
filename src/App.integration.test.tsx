@@ -72,7 +72,14 @@ describe('App', () => {
     );
     render(<App />);
     useAppStore.getState().startAnalysis();
-    expect(await screen.findByRole('status')).toHaveTextContent(/querying/i);
+    // Several polite regions are mounted at once now (Task 6.2, requirement 7
+    // added an always-present "Analysis outcome" one), so this finds the
+    // loading text and then checks it is inside a status region, rather than
+    // assuming there is only one.
+    const querying = await screen.findByText(/querying/i);
+    expect(querying.closest('[role="status"]')).not.toBeNull();
+    // ...and the completion region is mounted but still silent.
+    expect(screen.getByRole('status', { name: 'Analysis outcome' })).toHaveTextContent('');
   });
 
   it('surfaces a LAPIS error with its detail and offers a retry', async () => {

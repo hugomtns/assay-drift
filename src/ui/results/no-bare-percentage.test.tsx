@@ -114,13 +114,14 @@ const CASES: Readonly<Array<[string, ReactElement]>> = [
   ['HeadlineCard (nothing assessable)', <HeadlineCard analysis={unassessableAnalysis} />],
   ['PositionProfile', <PositionProfile analysis={sampleAnalysis} />],
   ['TrendChart', <TrendChart trend={sampleAnalysis.trend} />],
-  ['AttributionTable (lineage)', <AttributionTable attribution={sampleAnalysis.lineage} label="Pango lineage" />],
-  ['AttributionTable (country)', <AttributionTable attribution={sampleAnalysis.country} label="Country" />],
+  ['AttributionTable (lineage)', <AttributionTable attribution={sampleAnalysis.lineage} label="Pango lineage" oligoName={sampleAnalysis.name} />],
+  ['AttributionTable (country)', <AttributionTable attribution={sampleAnalysis.country} label="Country" oligoName={sampleAnalysis.name} />],
   [
     'InsertionNote',
     <InsertionNote
       insertions={sampleAnalysis.insertions}
       denominator={sampleAnalysis.metrics.nFullCoverage}
+      oligoName={sampleAnalysis.name}
     />,
   ],
   ['SeverityBadge', <SeverityBadge severity={sampleAnalysis.severity} role="forward" />],

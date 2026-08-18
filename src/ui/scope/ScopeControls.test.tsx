@@ -8,6 +8,29 @@ import { useAppStore } from '../../state/store';
 import { act, waitFor, within } from '@testing-library/react';
 import type { LapisRequest, LapisResponse, LapisTransport } from '../../core/lapis/transport';
 
+/**
+ * The wizard's advance buttons are `aria-disabled`, not `disabled` (Task 6.2,
+ * requirement 2). `disabled` removed them from the tab order, so a keyboard
+ * user never met the control and was never told why the step would not
+ * advance; `aria-disabled` keeps them focusable and announced as disabled,
+ * and the click handler refuses to act.
+ *
+ * jest-dom's `toBeDisabled()` ignores `aria-disabled` entirely, so leaving it
+ * here would not fail -- it would quietly report every blocked button as
+ * enabled and stop testing anything. These two helpers replace it, and they
+ * assert more than it did: still reachable, and carrying a reason.
+ */
+const expectBlocked = (el: HTMLElement): void => {
+  expect(el).toHaveAttribute('aria-disabled', 'true');
+  expect(el).not.toBeDisabled();
+  expect(el).toHaveAccessibleDescription(/\S/);
+};
+
+const expectActionable = (el: HTMLElement): void => {
+  expect(el).not.toHaveAttribute('aria-disabled', 'true');
+  expect(el).not.toBeDisabled();
+};
+
 beforeEach(() => { useAppStore.getState().reset(); });
 
 describe('ScopeControls', () => {
@@ -33,7 +56,7 @@ describe('ScopeControls', () => {
     await userEvent.clear(to);
     await userEvent.type(to, '1999-01-01');
     expect(await screen.findByText(/end date must be on or after/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /run analysis/i })).toBeDisabled();
+    expectBlocked(screen.getByRole('button', { name: /run analysis/i }));
   });
 
   it('states that an empty filter means all', () => {
@@ -166,7 +189,7 @@ describe('ScopeControls option lists', () => {
     const { transport } = pendingTransport();
     render(<ScopeControls onRun={vi.fn()} transport={transport} />);
     expect(screen.getByLabelText(/country/i)).toBeEnabled();
-    expect(screen.getByRole('button', { name: /run analysis/i })).toBeEnabled();
+    expectActionable(screen.getByRole('button', { name: /run analysis/i }));
   });
 
   it('aborts the in-flight option load on unmount (Global Constraint 9)', () => {
@@ -294,7 +317,7 @@ describe('ScopeControls option lists', () => {
     render(<ScopeControls onRun={vi.fn()} transport={failingTransport()} />);
 
     expect(await screen.findByText(/could not be loaded/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /run analysis/i })).toBeEnabled();
+    expectActionable(screen.getByRole('button', { name: /run analysis/i }));
     expect(screen.getByLabelText(/country/i)).toBeEnabled();
     // An empty filter still means "all", so nothing about the step is broken.
     expect(useAppStore.getState().scope.countries).toEqual([]);
@@ -437,8 +460,8 @@ describe('ScopeControls validation messaging', () => {
     expect(to).toHaveAccessibleDescription(/end date must be on or after/i);
     expect(to).toHaveAttribute('aria-invalid', 'true');
     expect(screen.getByLabelText(/collected from/i)).toHaveAttribute('aria-invalid', 'true');
-    // The button is `disabled`, so it is out of the tab order and cannot be
-    // reached to discover why. The description is what carries the reason.
+    // The button is `aria-disabled` (Task 6.2), so it stays in the tab order
+    // and the description is what a keyboard user hears on reaching it.
     expect(screen.getByRole('button', { name: /run analysis/i })).toHaveAccessibleDescription(
       /end date must be on or after/i,
     );

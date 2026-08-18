@@ -8,3 +8,29 @@ body {
   min-height: 100vh;
   background-color: #f8fafc;
 }
+
+/*
+  WCAG 2.3.3 / 2.2.2, installed before there is anything to install it for.
+
+  As of Task 6.2 the app has no motion at all: `src/` contains no `transition`,
+  no `animate-` and no `duration-` utility, so this rule currently does
+  nothing. That is exactly why it is here rather than in the commit that adds
+  the first animation -- a guard written afterwards protects nobody who used
+  the app in between, and a test asserting "reduced motion disables the
+  transitions" over an empty set would pass forever whatever anyone added next.
+
+  0.01ms rather than 0: a zero-duration transition never fires `transitionend`,
+  so any code that waits for one would hang. `!important` because it has to
+  beat a utility class, and the universal selector because the point is that
+  nobody has to remember this file exists.
+*/
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

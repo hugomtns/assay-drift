@@ -76,23 +76,15 @@ function unattributed(p: PositionStat): boolean {
   return !p.referenceIsAmbiguous && p.mismatchCount > p.substitutionCount + p.deletionCount;
 }
 
-/**
- * What a screen reader hears for one column.
- *
- * The ambiguous-reference branch carries no percentage at all — not `0.0%`,
- * not `0%`. `statFor` returns zeros for such a position because it was never
- * queried, not because nothing was found there, and reading "0% mismatch"
- * would state that the site is conserved at a position where we cannot tell.
- */
-function describe(p: PositionStat): string {
-  const where = `position ${formatCount(p.refPos)}`;
+/** The note column of the hidden table: whatever qualifies this row's numbers. */
+function noteFor(p: PositionStat): string {
   if (p.referenceIsAmbiguous) {
-    return `${where}, not assessable: the reference base is ambiguous, so no rate can be computed here`;
+    return 'Not assessable: the reference base is ambiguous, so no rate can be computed here.';
   }
-  const core =
-    `${where}, ${formatPercent(p.mismatchFraction)} mismatch, ` +
-    `n = ${formatCount(p.mismatchCount)} of ${formatCount(p.effectiveDenominator)}`;
-  return p.coverageIsInferred ? `${core}, per-position coverage not reported` : core;
+  if (p.coverageIsInferred) {
+    return 'Per-position coverage not reported; the window denominator is used instead.';
+  }
+  return '';
 }
 
 function titleFor(p: PositionStat): string | null {
@@ -112,9 +104,24 @@ function PositionColumn({ stat, hatchId }: PositionColumnProps) {
   const barHeight = segments.reduce((sum, s) => sum + s.height, 0);
 
   return (
+    /*
+      `aria-hidden`, not `role="img"` with a per-column label (Task 6.2,
+      requirement 3).
+
+      Each column used to be its own labelled image, so the only way to read
+      the profile was to arrow through N separate pictures, hearing one full
+      sentence each, with no way to compare two positions or reach a total. The
+      visually hidden table below now carries exactly the same numbers in a
+      form that can be navigated by cell, so leaving the labels in place would
+      announce every position twice -- 44 sentences for 22 data points -- and
+      the duplicate is strictly the worse of the two.
+
+      The `<title>` stays. It is the mouse tooltip, which browsers render from
+      the element regardless of `aria-hidden`, and it is the only place a
+      sighted user learns that a bar's denominator was borrowed.
+    */
     <svg
-      role="img"
-      aria-label={describe(stat)}
+      aria-hidden="true"
       width={COLUMN_WIDTH}
       height={SVG_HEIGHT}
       viewBox={`0 0 ${COLUMN_WIDTH} ${SVG_HEIGHT}`}
@@ -215,7 +222,6 @@ interface PositionProfileProps {
  *   only a hollow "not assessable" mark. See `describe`.
  */
 export function PositionProfile({ analysis }: PositionProfileProps) {
-  const headingId = useId();
   // `useId` returns delimiters (React 19 uses «…») that are legal in an id but
   // not in a `url(#…)` reference, so the generated part is stripped to
   // word characters before it is used as a fragment target.
@@ -232,10 +238,19 @@ export function PositionProfile({ analysis }: PositionProfileProps) {
   const anyUnattributed = profile.some(unattributed);
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-2">
-      <h4 id={headingId} className="text-base font-semibold text-slate-900">
-        Per-position mismatch
-      </h4>
+    /*
+      Named with the oligo, not just "Per-position mismatch". A results page
+      carries one of these per oligo, and three identically named regions in a
+      landmark list are three dead ends -- axe's `landmark-unique` flags it and
+      it is a genuine navigation failure, not a lint nicety. `aria-label`
+      rather than `aria-labelledby` so the visible heading stays as it was;
+      the accessible name is the heading plus the thing it is about.
+    */
+    <section
+      aria-label={`Per-position mismatch: ${analysis.name}`}
+      className="flex flex-col gap-2"
+    >
+      <h4 className="text-base font-semibold text-slate-900">Per-position mismatch</h4>
       <p className="text-sm text-slate-700">
         Each bar is the share of assessable sequences carrying a mismatch at that position. Bases
         read 5′ (left) to 3′ (right).
@@ -290,6 +305,53 @@ export function PositionProfile({ analysis }: PositionProfileProps) {
           <span className="pl-1 text-[11px] leading-4 text-slate-600">3′</span>
         </div>
       </div>
+
+      {/*
+        The chart's equivalent for assistive technology (Task 6.2,
+        requirement 3), and the reason the columns above are `aria-hidden`.
+
+        Everything the bars encode is here in text: the rate a bar's height
+        stands for, both counts it was computed from, and -- in the notes
+        column -- the two things the drawing says with a hatch and a hollow
+        mark. A table also gives what N separate labelled images could not:
+        column headers announced with every cell, and the ability to move
+        between positions to compare them.
+
+        `formatPercent` is never called for an ambiguous reference base. That
+        position was not queried, so `0.0%` there would state the site is
+        conserved somewhere we cannot see at all.
+      */}
+      <table className="sr-only">
+        <caption>
+          {`Per-position mismatch for ${analysis.name}, with the counts each rate was computed from. Rows read 5′ to 3′.`}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Position</th>
+            <th scope="col">Base in the oligo</th>
+            <th scope="col">Sequences with a mismatch</th>
+            <th scope="col">Assessable sequences</th>
+            <th scope="col">Mismatch rate</th>
+            <th scope="col">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {profile.map((p) => (
+            <tr key={`row-${String(p.refPos)}-${String(p.oligoIndex)}`}>
+              <th scope="row">{formatCount(p.refPos)}</th>
+              <td>{p.oligoBase}</td>
+              <td>{p.referenceIsAmbiguous ? 'Not assessable' : formatCount(p.mismatchCount)}</td>
+              <td>
+                {p.referenceIsAmbiguous ? 'Not assessable' : formatCount(p.effectiveDenominator)}
+              </td>
+              <td>
+                {p.referenceIsAmbiguous ? 'Not assessable' : formatPercent(p.mismatchFraction)}
+              </td>
+              <td>{noteFor(p)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
       {anyTerminal && (
         <p className="text-xs text-amber-900">

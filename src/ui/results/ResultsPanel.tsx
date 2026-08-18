@@ -59,13 +59,24 @@ export function ResultsPanel({ result }: ResultsPanelProps) {
           <SeverityBadge severity={oligo.severity} role={oligo.role} />
           <PositionProfile analysis={oligo} />
           <TrendChart trend={oligo.trend} />
+          {/*
+            Every panel below is repeated once per oligo, so each is named with
+            the oligo it belongs to. Without that a three-oligo result exposes
+            six identically named regions and a landmark list that cannot be
+            used to get anywhere.
+          */}
           <div className="flex flex-wrap gap-6">
-            <AttributionTable attribution={oligo.lineage} label={cfg.lineageLabel} />
-            <AttributionTable attribution={oligo.country} label="Country" />
+            <AttributionTable
+              attribution={oligo.lineage}
+              label={cfg.lineageLabel}
+              oligoName={oligo.name}
+            />
+            <AttributionTable attribution={oligo.country} label="Country" oligoName={oligo.name} />
           </div>
           <InsertionNote
             insertions={oligo.insertions}
             denominator={oligo.metrics.nFullCoverage}
+            oligoName={oligo.name}
           />
         </div>
       ))}

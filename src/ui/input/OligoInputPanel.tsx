@@ -5,6 +5,9 @@ import { RoleSelector } from './RoleSelector';
 
 const DEBOUNCE_MS = 200;
 
+/** The always-mounted region carrying the reason `Continue` will not advance. */
+const CONTINUE_BLOCKED_ID = 'oligo-continue-blocked';
+
 /**
  * Step 1 of the wizard: paste FASTA or bare-line oligo sequences, see them
  * parsed with guessed roles, fix any role that couldn't be guessed, and
@@ -194,6 +197,24 @@ export function OligoInputPanel() {
     parsed.oligos.every((oligo) => effectiveRole(oligo.id, oligo.role) !== undefined);
 
   /**
+   * Why `Continue` will not advance, or `''` when it will.
+   *
+   * The button is `aria-disabled` rather than `disabled` (Task 6.2), so it
+   * keeps its place in the tab order and can be focused to find out what is
+   * missing. The oligos are named: "choose a role" with three on screen is not
+   * an instruction anyone can act on without hunting.
+   */
+  const roleless = parsed.oligos
+    .filter((oligo) => effectiveRole(oligo.id, oligo.role) === undefined)
+    .map((oligo) => oligo.name);
+  const blockedReason =
+    parsed.oligos.length === 0
+      ? 'Paste at least one oligo above before continuing.'
+      : roleless.length > 0
+        ? `Every oligo needs a role before this step can continue. Still waiting on: ${roleless.join(', ')}.`
+        : '';
+
+  /**
    * Leaving this step is the first moment anything reads `oligos` and `roles`
    * for real, and for up to DEBOUNCE_MS after the last keystroke they still
    * describe the *previous* parse. A user who pastes and immediately clicks
@@ -250,7 +271,19 @@ export function OligoInputPanel() {
         })}
       </ul>
 
-      <button type="button" disabled={!canContinue} onClick={handleContinue}>
+      {/* Always mounted, text swapped in; see BindingResolution for why. */}
+      <p id={CONTINUE_BLOCKED_ID} role="status">
+        {blockedReason}
+      </p>
+
+      <button
+        type="button"
+        aria-disabled={!canContinue}
+        aria-describedby={canContinue ? undefined : CONTINUE_BLOCKED_ID}
+        onClick={() => {
+          if (canContinue) handleContinue();
+        }}
+      >
         Continue
       </button>
     </section>

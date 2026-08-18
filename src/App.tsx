@@ -18,6 +18,7 @@ import libraryRaw from './data/assays/library.json';
 import { parseLibrary, type LibraryAssay } from './data/assays/schema';
 import { loadReference } from './data/references';
 import { useAppStore } from './state/store';
+import { AnalysisAnnouncer } from './ui/AnalysisAnnouncer';
 import { AppShell } from './ui/AppShell';
 import { BindingResolution } from './ui/binding/BindingResolution';
 import { EmptyState } from './ui/common/EmptyState';
@@ -488,6 +489,13 @@ export default function App() {
 
   return (
     <AppShell step={step} pathogenSelector={<PathogenSelector value={pathogenId} onChange={setPathogen} />}>
+      {/*
+        A sibling of `content`, never inside it. `content` is replaced wholesale
+        when `status` or `step` changes, and a live region that is unmounted and
+        remounted with its text already in place is frequently never announced.
+        Kept first so it holds the same DOM node across every step.
+      */}
+      <AnalysisAnnouncer status={status} result={result} />
       {content}
     </AppShell>
   );

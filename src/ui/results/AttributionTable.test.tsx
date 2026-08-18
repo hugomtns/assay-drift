@@ -18,7 +18,7 @@ const attribution = (over: Partial<Attribution> = {}): Attribution => ({
 
 describe('AttributionTable', () => {
   it('lists the top values with counts and shares', () => {
-    render(<AttributionTable attribution={attribution()} label="Lineage" />);
+    render(<AttributionTable attribution={attribution()} label="Lineage" oligoName="N1-F" />);
     expect(screen.getByText('BA.2.86')).toBeInTheDocument();
     expect(screen.getByText('1,200')).toBeInTheDocument();
     expect(screen.getByText('60.0%')).toBeInTheDocument();
@@ -29,31 +29,31 @@ describe('AttributionTable', () => {
 
   it('renders an other row only when the tail is non-empty', () => {
     const { unmount } = render(
-      <AttributionTable attribution={attribution({ otherCount: 200 })} label="Lineage" />,
+      <AttributionTable attribution={attribution({ otherCount: 200 })} label="Lineage" oligoName="N1-F" />,
     );
     expect(screen.getByText(/^other$/i)).toBeInTheDocument();
     expect(screen.getByText('200')).toBeInTheDocument();
     unmount();
 
-    render(<AttributionTable attribution={attribution({ otherCount: 0 })} label="Lineage" />);
+    render(<AttributionTable attribution={attribution({ otherCount: 0 })} label="Lineage" oligoName="N1-F" />);
     expect(screen.queryByText(/^other$/i)).toBeNull();
   });
 
   it('renders an unassigned row only when non-zero', () => {
     const { unmount } = render(
-      <AttributionTable attribution={attribution({ unassignedCount: 150 })} label="Lineage" />,
+      <AttributionTable attribution={attribution({ unassignedCount: 150 })} label="Lineage" oligoName="N1-F" />,
     );
     expect(screen.getByText(/^unassigned$/i)).toBeInTheDocument();
     expect(screen.getByText('150')).toBeInTheDocument();
     unmount();
 
-    render(<AttributionTable attribution={attribution({ unassignedCount: 0 })} label="Lineage" />);
+    render(<AttributionTable attribution={attribution({ unassignedCount: 0 })} label="Lineage" oligoName="N1-F" />);
     expect(screen.queryByText(/^unassigned$/i)).toBeNull();
   });
 
   it('states what the shares are of', () => {
     const { container } = render(
-      <AttributionTable attribution={attribution()} label="Lineage" />,
+      <AttributionTable attribution={attribution()} label="Lineage" oligoName="N1-F" />,
     );
     const caption = container.querySelector('caption');
     expect(caption).not.toBeNull();
@@ -61,7 +61,7 @@ describe('AttributionTable', () => {
   });
 
   it('names the total the shares are taken over', () => {
-    render(<AttributionTable attribution={attribution()} label="Lineage" />);
+    render(<AttributionTable attribution={attribution()} label="Lineage" oligoName="N1-F" />);
     expect(screen.getByText(/2,000/)).toBeInTheDocument();
   });
 });

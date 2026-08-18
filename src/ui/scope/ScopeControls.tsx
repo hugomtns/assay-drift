@@ -283,14 +283,13 @@ export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
     if (inverted) ids.push(DATE_RANGE_MESSAGE_ID);
     return ids.length > 0 ? ids.join(' ') : undefined;
   };
-  // `disabled` (rather than `aria-disabled`) keeps the button unactivatable,
-  // which is what a "run the analysis" action wants -- but it also takes the
-  // button out of the tab order, so the reason has to travel with it as a
-  // description instead of waiting to be discovered on focus. Switching to
-  // `aria-disabled` would keep it reachable, and is the better long-term
-  // answer, but jest-dom's `toBeDisabled()` does not consider `aria-disabled`,
-  // so it would fail the brief's third test -- which is not mine to loosen.
-  // Flagged for Task 6.2, which owns accessibility properly.
+  // `aria-disabled`, not `disabled` (Task 6.2, requirement 2). `disabled`
+  // keeps the button unactivatable but also removes it from the tab order, so
+  // a keyboard user tabbing through this form never encounters "Run analysis"
+  // at all and is given no account of why the step will not advance.
+  // `aria-disabled` keeps it focusable and announced as disabled, and the
+  // `onClick` below refuses to act, so it is inert in exactly the same way.
+  // The reason travels with it as a description either way.
   const blockingMessageId = missingDate
     ? DATE_MISSING_MESSAGE_ID
     : inverted
@@ -468,10 +467,15 @@ export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
 
       <button
         type="button"
-        onClick={onRun}
-        disabled={!canRun}
+        onClick={() => {
+          // A control that says it is disabled must behave as though it is.
+          if (canRun) onRun();
+        }}
+        aria-disabled={!canRun}
         aria-describedby={blockingMessageId}
-        className="self-start rounded bg-slate-900 px-4 py-2 text-white disabled:bg-slate-300"
+        className={`self-start rounded px-4 py-2 ${
+          canRun ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-700'
+        }`}
       >
         Run analysis
       </button>
