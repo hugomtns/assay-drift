@@ -166,3 +166,46 @@ describe('ResultsPanel', () => {
     expect(titles.filter((t) => t.includes('per-position coverage not reported'))).toEqual([]);
   });
 });
+
+/**
+ * Three checks that exist because walking the deployed site found what the
+ * suite could not. jsdom does no layout, so it cannot tell you that a panel is
+ * 6,000 pixels down or that a region scrolls -- but it can tell you the two
+ * structural facts those failures reduce to, and those are what is pinned here.
+ */
+describe('ResultsPanel — what the browser found and jsdom could not', () => {
+  it('puts the caveats above the figures they qualify, not after them', () => {
+    // On the deployed site the panel sat at 6,058px of a 6,877px page, so the
+    // app's own three-oligo worked example put every caveat below every number.
+    // Global Constraint 7 held in the markup and failed in the reading.
+    const { container } = render(<ResultsPanel result={sampleResult} />);
+    const caveats = container.querySelector('#caveat-panel-heading');
+    const firstCard = container.querySelector('article');
+    expect(caveats).not.toBeNull();
+    expect(firstCard).not.toBeNull();
+
+    const order = caveats!.compareDocumentPosition(firstCard!);
+    expect(order & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('does not number the caveat panel as a fifth step', () => {
+    // The step navigation has four steps, and this panel now precedes step 4's
+    // own figures. A "Step 5" heading would be wrong twice over.
+    render(<ResultsPanel result={sampleResult} />);
+    const heading = screen.getByRole('heading', { name: /what they do not tell you/i });
+    expect(heading.textContent).not.toMatch(/step\s*5/i);
+  });
+
+  it('gives every horizontally scrolling region keyboard access', () => {
+    // axe's scrollable-region-focusable, which reports 3 serious violations in
+    // a real browser and is *inapplicable* under jsdom — it needs layout to see
+    // that a region scrolls at all. The structural fix is assertable here.
+    const { container } = render(<ResultsPanel result={sampleResult} />);
+    const scrollers = [...container.querySelectorAll('.overflow-x-auto')];
+    expect(scrollers.length).toBeGreaterThan(0);
+    for (const el of scrollers) {
+      expect(el.getAttribute('tabindex')).toBe('0');
+      expect(el.getAttribute('aria-label')).toMatch(/\S/);
+    }
+  });
+});

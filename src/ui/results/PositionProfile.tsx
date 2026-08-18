@@ -289,7 +289,18 @@ export function PositionProfile({ analysis }: PositionProfileProps) {
         </defs>
       </svg>
 
-      <div className="overflow-x-auto">
+      {/*
+        Focusable for the same reason as `TrendChart`'s wrapper: a horizontally
+        scrolling region that a keyboard user cannot reach, because everything
+        inside it is `aria-hidden`. See that file for why the suite could not
+        see this and the deployed site could.
+      */}
+      <div
+        className="overflow-x-auto"
+        tabIndex={0}
+        role="group"
+        aria-label={`Per-position mismatch chart for ${analysis.name}, scrollable`}
+      >
         <div className="flex w-fit items-start">
           <span className="pr-1 text-[11px] leading-4 text-slate-600">5′</span>
           {profile.map((p) => (

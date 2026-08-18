@@ -113,7 +113,24 @@ export function TrendChart({ trend }: TrendChartProps) {
         {`Mismatch rate by ${granularity}. A break in the line is a ${granularity} with too few assessable sequences to compute a rate, not a ${granularity} with none. Every count is in the table below.`}
       </figcaption>
 
-      <div className="overflow-x-auto">
+      {/*
+        `tabIndex={0}` because this scrolls horizontally and a keyboard user
+        cannot reach a scroll container that nothing inside it can focus. axe's
+        `scrollable-region-focusable` catches it — but only in a real browser:
+        jsdom does no layout, so it cannot tell a scrollable region from any
+        other div and marks the rule inapplicable. It was found by walking the
+        deployed site, not by the suite.
+
+        `role="group"` with a name rather than `role="img"`: the drawing itself
+        is `aria-hidden` and the numbers live in the table below, so what is
+        being focused is a scrollable area, not a picture.
+      */}
+      <div
+        className="overflow-x-auto"
+        tabIndex={0}
+        role="group"
+        aria-label={`Mismatch rate chart by ${granularity}, scrollable`}
+      >
         <svg
           aria-hidden="true"
           width={width}

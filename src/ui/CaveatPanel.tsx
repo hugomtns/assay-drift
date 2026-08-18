@@ -74,7 +74,12 @@ interface CaveatPanelProps {
 }
 
 /**
- * Step 5: what these numbers do not tell you.
+ * What these numbers do not tell you.
+ *
+ * Not "Step 5": the step navigation has four steps, and this panel now sits
+ * above the figures rather than after them, so a fifth number would have been
+ * wrong twice over. It is not a step the user takes; it is what they should
+ * have in hand before reading the ones they asked for.
  *
  * Global Constraint 7 -- this panel is never collapsed. No <details>, no
  * `hidden`, no accordion, no "show more". A caveat behind a click is a caveat
@@ -88,7 +93,7 @@ export function CaveatPanel({ result }: CaveatPanelProps) {
   return (
     <section aria-labelledby="caveat-panel-heading" className="flex flex-col gap-4">
       <h2 id="caveat-panel-heading" className="text-xl font-semibold">
-        Step 5: What these numbers do not tell you
+        Before you read these numbers: what they do not tell you
       </h2>
 
       <ul className="flex list-disc flex-col gap-2 pl-5 text-sm text-slate-700">

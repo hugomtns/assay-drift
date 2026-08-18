@@ -238,41 +238,61 @@ export function OligoInputPanel() {
   };
 
   return (
-    <section aria-labelledby="oligo-input-heading">
-      <h2 id="oligo-input-heading">Step 1: Enter your oligos</h2>
-      <label htmlFor="oligo-textarea">Paste your oligos</label>
-      {/*
-        Deliberately uncontrolled: React keeps a controlled <textarea>'s DOM
-        text content mirrored to `value` on every render (to preserve
-        selection across updates), which would make the raw pasted text
-        queryable via getByText alongside our own rendered output. Reading
-        onChange without feeding `value` back avoids that duplication.
-      */}
-      <textarea id="oligo-textarea" onChange={(e) => setText(e.target.value)} rows={8} />
+    <section aria-labelledby="oligo-input-heading" className="flex flex-col gap-4">
+      <h2 id="oligo-input-heading" className="text-xl font-semibold">
+        Step 1: Enter your oligos
+      </h2>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="oligo-textarea" className="text-sm font-medium text-slate-900">
+          Paste your oligos
+        </label>
+        {/*
+          Deliberately uncontrolled: React keeps a controlled <textarea>'s DOM
+          text content mirrored to `value` on every render (to preserve
+          selection across updates), which would make the raw pasted text
+          queryable via getByText alongside our own rendered output. Reading
+          onChange without feeding `value` back avoids that duplication.
+        */}
+        <textarea
+          id="oligo-textarea"
+          onChange={(e) => setText(e.target.value)}
+          rows={8}
+          className="w-full rounded border border-slate-300 px-2 py-1 font-mono text-sm"
+        />
+      </div>
 
       {parsed.errors.length > 0 && (
-        <ul aria-label="Parse errors">
+        <ul
+          aria-label="Parse errors"
+          className="flex flex-col gap-1 rounded bg-red-50 p-2 text-sm text-red-900"
+        >
           {parsed.errors.map((error) => (
             <li key={error}>{error}</li>
           ))}
         </ul>
       )}
 
-      <ul aria-label="Parsed oligos">
+      <ul aria-label="Parsed oligos" className="flex flex-col gap-2">
         {parsed.oligos.map((oligo) => {
           const role = effectiveRole(oligo.id, oligo.role);
           return (
-            <li key={oligo.id}>
-              <span>{oligo.name}</span> <span>{oligo.sequence.length} nt</span>
+            <li
+              key={oligo.id}
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded border border-slate-200 p-2 text-sm"
+            >
+              <span className="font-medium text-slate-900">{oligo.name}</span>{' '}
+              <span className="tabular-nums text-slate-600">{oligo.sequence.length} nt</span>
               <RoleSelector oligoId={oligo.id} name={oligo.name} role={role} onChange={handleRoleChange} />
-              {role === undefined && <span>Choose a role for this oligo.</span>}
+              {role === undefined && (
+                <span className="text-amber-900">Choose a role for this oligo.</span>
+              )}
             </li>
           );
         })}
       </ul>
 
       {/* Always mounted, text swapped in; see BindingResolution for why. */}
-      <p id={CONTINUE_BLOCKED_ID} role="status">
+      <p id={CONTINUE_BLOCKED_ID} role="status" className="text-sm text-slate-600">
         {blockedReason}
       </p>
 
@@ -283,6 +303,9 @@ export function OligoInputPanel() {
         onClick={() => {
           if (canContinue) handleContinue();
         }}
+        className={`self-start rounded px-4 py-2 ${
+          canContinue ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-700'
+        }`}
       >
         Continue
       </button>

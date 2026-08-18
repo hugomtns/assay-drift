@@ -128,6 +128,20 @@ export function ResultsPanel({ result, transport }: ResultsPanelProps) {
         {`${formatCount(result.nScope)} ${cfg.label} sequences match this scope, collected ${result.scope.dateFrom} to ${result.scope.dateTo} inclusive. Data version ${result.dataVersion}, read ${result.generatedAt}, over ${formatCount(result.queryCount)} queries.`}
       </p>
 
+      {/*
+        Above the numbers, not below them.
+
+        Global Constraint 7 says this panel is never collapsed, and it never
+        was -- no <details>, no `hidden`. But walking the deployed site put it
+        at 6,058px on a 6,877px page: with the app's own three-oligo worked
+        example the reader met the caveats only after scrolling past every
+        figure they qualify. A caveat that far down is one the reader has
+        already decided not to read, which is the exact failure the constraint
+        exists to prevent -- reached by position rather than by a widget.
+        Nothing in the suite could see it, because jsdom has no layout.
+      */}
+      <CaveatPanel result={result} />
+
       <ExportButtons result={result} />
 
       {result.oligos.map((oligo) => (
@@ -142,8 +156,6 @@ export function ResultsPanel({ result, transport }: ResultsPanelProps) {
           transport={transport}
         />
       ))}
-
-      <CaveatPanel result={result} />
     </section>
   );
 }
