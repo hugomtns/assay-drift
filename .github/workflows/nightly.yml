@@ -1,0 +1,88 @@
+# Nightly verification against the live LAPIS instances.
+#
+# Deliberately NOT on push or pull_request. Everything here talks to public
+# APIs we do not control, so a network hiccup or an upstream data revision must
+# never be able to block a pull request. ci.yml is the gate; this is the alarm.
+name: Nightly live check
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: LAPIS contract
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - id: live
+        run: npm run test:live
+      # Conditioned on the check itself, not on the job: an issue headed "the
+      # LAPIS contract is failing" that was really an npm registry hiccup is a
+      # false alarm, and false alarms are how a nightly job gets muted. A
+      # failure earlier in the job still fails the workflow and still notifies.
+      - name: Open or update the contract issue
+        if: failure() && steps.live.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: 'Nightly: the LAPIS contract check is failing'
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "\`npm run test:live\` failed on the nightly run."
+            echo
+            echo "A field name, a date parameter or a reference genome on one of the three"
+            echo "instances has probably changed. Part I.2 of \`implementation.md\` records"
+            echo "what was verified on 2026-08-01; the failing assertion says which part moved."
+            echo
+            echo "Run: $RUN_URL"
+          } > body.md
+          bash .github/open-or-update-issue.sh body.md
+
+  golden-drift:
+    name: Golden drift
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      # The default shell here is `bash -eo pipefail`, so the pipe preserves the
+      # script's exit status and the report survives for the failure step below.
+      - id: drift
+        name: Recompute the five golden measurements against the live API
+        run: npm run verify:golden 2>&1 | tee drift-report.txt
+      - name: Open or update the drift issue
+        if: failure() && steps.drift.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: 'Nightly: a golden measurement has drifted from Part I.6'
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "One or more of the five Part I.6 golden measurements no longer reproduces"
+            echo "against the live API."
+            echo
+            echo "**Do not edit the targets to match.** They are the ground truth measured on"
+            echo "2026-08-01 and recorded in \`implementation.md\` lines 212-252. A real move in"
+            echo "the underlying data is the finding, not the bug."
+            echo
+            echo "Run: $RUN_URL"
+            echo
+            echo '```'
+            cat drift-report.txt || echo '(no report produced - the script died before printing)'
+            echo '```'
+          } > body.md
+          bash .github/open-or-update-issue.sh body.md

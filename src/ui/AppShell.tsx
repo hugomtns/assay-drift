@@ -2,6 +2,21 @@ import type { ReactNode } from 'react';
 import { REGULATORY_STATEMENT, type Step } from '../state/store';
 import { RegulatoryNotice } from './RegulatoryNotice';
 
+/**
+ * The methods statement, on GitHub rather than in the app.
+ *
+ * `docs/methods.md` is a repository file and the Vite build does not serve
+ * `docs/`, so a relative link would 404 in production. The two ways out were to
+ * copy the file into `public/` so it ships, or to point at the repository. The
+ * copy loses: two files saying the same thing drift, and the one that drifts is
+ * always the copy nobody edits -- which on a tool whose entire argument is
+ * traceability would be worse than the 404. The repository link also carries
+ * something the copy cannot, a revision history for the definitions themselves.
+ *
+ * It leaves the app, so the link text says so rather than relying on an icon.
+ */
+const METHODS_URL = 'https://github.com/hugomtns/assay-drift/blob/main/docs/methods.md';
+
 const STEPS: Readonly<Array<{ id: Step; label: string }>> = [
   { id: 'input', label: 'Oligos' },
   { id: 'binding', label: 'Binding site' },
@@ -47,8 +62,18 @@ export function AppShell({ step, pathogenSelector, children }: AppShellProps) {
 
       <main>{children}</main>
 
-      <footer className="border-t border-slate-200 pt-4 text-sm text-slate-600">
-        {REGULATORY_STATEMENT}
+      <footer className="flex flex-col gap-2 border-t border-slate-200 pt-4 text-sm text-slate-600">
+        <p>{REGULATORY_STATEMENT}</p>
+        <p>
+          <a
+            className="text-slate-700 underline underline-offset-2 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+            href={METHODS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            How these numbers are computed: methods and limitations (opens on GitHub in a new tab)
+          </a>
+        </p>
       </footer>
     </div>
   );

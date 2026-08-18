@@ -20,6 +20,7 @@
     "format": "prettier --write .",
     "refs": "tsx scripts/fetch-references.ts",
     "verify:assays": "tsx scripts/verify-assays.ts",
+    "verify:golden": "tsx scripts/check-golden-drift.ts",
     "fixtures": "tsx scripts/record-fixtures.ts"
   },
   "dependencies": {
