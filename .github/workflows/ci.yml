@@ -15,3 +15,64 @@ jobs:
       - run: npm test
       - run: npm run verify:assays
       - run: npm run build
+
+  # Every push to main deploys, so every push produces an artefact somebody
+  # could cite. This gives each one a version rather than leaving it to be
+  # remembered: `TOOL_VERSION` is read from package.json into the methods
+  # paragraph users paste into documents, and two builds that call themselves
+  # the same version make that paragraph useless.
+  #
+  # `needs: check` is the point. Tagging a build that did not pass the gates
+  # would be worse than not tagging at all -- it would put a version number on
+  # something nobody verified.
+  release:
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Tags and full history: the version is derived from the commits
+          # since the last release tag, and a shallow clone has neither.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+
+      - id: version
+        name: Work out the next version from the commit messages
+        run: |
+          NEXT=$(npx tsx scripts/next-version.ts --explain)
+          if [ -z "$NEXT" ]; then
+            echo "Nothing to release."
+            echo "next=" >> "$GITHUB_OUTPUT"
+          else
+            echo "next=$NEXT" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Tag the release
+        if: steps.version.outputs.next != ''
+        env:
+          NEXT: ${{ steps.version.outputs.next }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          npm version "$NEXT" --no-git-tag-version
+          git add package.json package-lock.json
+          git commit -m "chore(release): v$NEXT"
+          git tag -a "v$NEXT" -m "Assay Drift Watch v$NEXT"
+
+          # This push is made with the default GITHUB_TOKEN, and GitHub does not
+          # start workflow runs from pushes made with it. That is what stops
+          # this job from triggering itself -- the guard is the token, not a
+          # commit-message convention that someone could edit away.
+          #
+          # Vercel does redeploy on it, which is intended: the deploy carrying
+          # the new number is the one that ships it. Production therefore
+          # settles on the right version one deploy after the change, rather
+          # than shipping a build whose own paragraph misnames it.
+          git push origin HEAD:main --follow-tags
