@@ -3,6 +3,7 @@ import { runAnalysis, type AnalysisOligo } from './core/analysis/run';
 import { findBindingSites, type BindingSite } from './core/binding';
 import { withCache } from './core/lapis/caching-transport';
 import { createFetchTransport } from './core/lapis/fetch-transport';
+import { createProxyTransport, shouldUseProxy } from './core/lapis/proxy-transport';
 import type { OligoInput } from './core/oligo-input';
 import {
   decodePermalink,
@@ -308,8 +309,22 @@ export default function App() {
    * option lists overlap with them, so without per-key memoisation, in-flight
    * de-duplication and the sessionStorage entry underneath, re-running a scope
    * the user has already looked at pays for all of it again.
+   *
+   * Direct or proxied is decided once, here, by `shouldUseProxy`: the deployed
+   * production build goes through the Vercel Function in `api/lapis.ts` and its
+   * six-hour edge cache, and `npm run dev` -- which has no functions running --
+   * keeps talking to LAPIS directly, so neither needs configuring.
+   * `VITE_LAPIS_PROXY` overrides it in both directions; `npm run preview` wants
+   * `VITE_LAPIS_PROXY=0`, because it serves a production build with no function
+   * behind it. Whichever is chosen, this is still one object: the decision is
+   * inside the `useMemo`, so the dependency array stays empty and
+   * `ScopeControls` still sees a stable identity.
    */
-  const transport = useMemo(() => withCache(createFetchTransport()), []);
+  const transport = useMemo(
+    () =>
+      withCache(shouldUseProxy(import.meta.env) ? createProxyTransport() : createFetchTransport()),
+    [],
+  );
   const runRef = useRef<AbortController | null>(null);
 
   const start = useCallback(() => {

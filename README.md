@@ -90,6 +90,25 @@ npm install
 npm run dev
 ```
 
+**`npm run dev` talks to the three LAPIS instances directly.** They send
+`Access-Control-Allow-Origin: *`, so the browser can reach them without a proxy, and nothing has
+to be running locally.
+
+A **production** build instead routes every query through `api/lapis.ts`, a Vercel Function that
+validates the target against an allow-list derived from `src/core/registry.ts` and caches the
+answer at the edge for six hours. That is what the deployed site uses, and it exists so the
+opt-in exact-coverage fan-out (up to 60 queries per oligo) does not land on public
+infrastructure this project does not own, once per visitor.
+
+The switch is `VITE_LAPIS_PROXY`, and it is only needed when the default guess is wrong:
+
+| | |
+|---|---|
+| `npm run dev` | direct — the default in a dev build |
+| deployed on Vercel | proxied — the default in a production build |
+| `npm run preview`, or any static host that is not Vercel | set `VITE_LAPIS_PROXY=0`, or every query 404s |
+| `vercel dev` | set `VITE_LAPIS_PROXY=1` to exercise the function locally |
+
 ## Verification
 
 Every task in this project is checked against the same five commands, which are also the CI
