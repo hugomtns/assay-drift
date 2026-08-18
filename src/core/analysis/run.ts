@@ -6,6 +6,7 @@ import {
   queryAggregated, queryNucleotideInsertions, queryNucleotideMutations,
   type InsertionRow, type MutationRow,
 } from '../lapis/endpoints';
+import { guardResponseSize } from '../lapis/size-guard';
 import { getPathogen, type PathogenId } from '../registry';
 import { scopeToFilters, type Scope } from '../scope';
 import {
@@ -52,6 +53,19 @@ export interface AnalysisResult {
   nScope: number;
   oligos: OligoAnalysis[];
   queryCount: number;
+  /**
+   * Diagnostics that belong to the run rather than to any one binding site.
+   *
+   * `OligoAnalysis.diagnostics` describes one oligo's site and every message
+   * there names that oligo, because `CaveatPanel` de-duplicates by `id` and
+   * one oligo ends up speaking for the panel. The size of the shared mutations
+   * payload is not a property of an oligo at all -- it is the same download
+   * whichever oligos are being analysed -- so attaching it to one of them
+   * would print a scope-wide fact under a name it has nothing to do with, and
+   * attaching it to all of them would depend on de-duplication to undo the
+   * copies. It lives here instead, and is empty for almost every run.
+   */
+  diagnostics: Diagnostic[];
 }
 
 export async function runAnalysis(input: {
@@ -98,6 +112,27 @@ export async function runAnalysis(input: {
   const mutationRows: MutationRow[] = mutationsRes.data;
   const insertionRows: InsertionRow[] = insertionsRes.data;
 
+  /**
+   * The guard warns; it never acts.
+   *
+   * Nothing below reacts to a large payload -- `minProportion` stays 0 and
+   * every row that came back is used. Raising the floor would drop exactly the
+   * low-frequency alleles the tool exists to surface, and would do it silently,
+   * on the queries most likely to matter.
+   *
+   * `responseBytes` is undefined whenever the transport could not measure
+   * (the fixture transport, any future transport that replays), and undefined
+   * means unmeasured, not small.
+   */
+  const runDiagnostics: Diagnostic[] = [];
+  const bytes = mutationsRes.responseBytes;
+  if (bytes !== undefined) {
+    const verdict = guardResponseSize(bytes, 'nucleotideMutations');
+    if (!verdict.ok && verdict.message !== null) {
+      runDiagnostics.push({ id: 'large-response', severity: 'info', message: verdict.message });
+    }
+  }
+
   const analyses: OligoAnalysis[] = oligos.map((o, i) => {
     const w = windows[i] as WindowSpec;
     const responses = perOligo[i];
@@ -135,5 +170,6 @@ export async function runAnalysis(input: {
     nScope,
     oligos: analyses,
     queryCount,
+    diagnostics: runDiagnostics,
   };
 }

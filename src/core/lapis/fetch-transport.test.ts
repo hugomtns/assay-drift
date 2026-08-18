@@ -25,7 +25,45 @@ describe('createFetchTransport', () => {
     expect(url).toBe('https://example.test/v2/sample/aggregated');
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body as string)).toEqual({ country: 'X' });
-    expect(res).toEqual({ data: [{ count: 7 }], dataVersion: '123', requestId: 'rid-1' });
+    expect(res).toEqual({
+      data: [{ count: 7 }],
+      dataVersion: '123',
+      requestId: 'rid-1',
+      responseBytes: JSON.stringify({
+        data: [{ count: 7 }],
+        info: { dataVersion: '123', requestId: 'rid-1' },
+      }).length,
+    });
+  });
+
+  it('reports the decoded size of the body it parsed', async () => {
+    const body = JSON.stringify({
+      data: [{ count: 7, country: 'Côte d’Ivoire' }],
+      info: { dataVersion: '123', requestId: 'rid-1' },
+    });
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(body, { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+    const t = createFetchTransport({ fetchImpl: fetchImpl as unknown as typeof fetch });
+    const res = await t.query(req);
+    // The UTF-8 length, not the UTF-16 one: this body has three non-ASCII
+    // characters, so `body.length` would under-report by three bytes.
+    expect(res.responseBytes).toBe(new TextEncoder().encode(body).length);
+    expect(res.responseBytes).toBeGreaterThan(body.length);
+  });
+
+  it('measures the decoded body, never Content-Length', async () => {
+    // LAPIS serves this gzipped and `fetch` decompresses transparently, so
+    // Content-Length is the compressed figure. A guard comparing it against a
+    // raw threshold would never fire.
+    const body = JSON.stringify({ data: [{ count: 7 }], info: {} });
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(body, { status: 200, headers: { 'Content-Length': '12' } }),
+    );
+    const t = createFetchTransport({ fetchImpl: fetchImpl as unknown as typeof fetch });
+    const res = await t.query(req);
+    expect(res.responseBytes).toBe(body.length);
+    expect(res.responseBytes).not.toBe(12);
   });
 
   it('throws LapisError carrying the API detail on 400 and does not retry', async () => {

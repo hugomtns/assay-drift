@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, it, expect } from 'vitest';
 import { ResultsPanel } from './ResultsPanel';
 import { FIXED_CAVEATS } from '../CaveatPanel';
@@ -6,6 +7,8 @@ import { SEVERITY_DISCLAIMER } from '../../core/analysis/constants';
 import { computeWindowMetrics } from '../../core/analysis/metrics';
 import type { PositionStat } from '../../core/analysis/profile';
 import type { AnalysisResult, OligoAnalysis } from '../../core/analysis/run';
+import { sampleResult } from '../../core/analysis/test-fixtures';
+import type { LapisTransport } from '../../core/lapis/transport';
 import type { OligoRole } from '../../core/oligo-input';
 
 const stat = (refPos: number, oligoIndex: number, oligoBase: string): PositionStat => ({
@@ -91,6 +94,7 @@ const result = () =>
     nScope: 71142,
     oligos: [oligo('N1-F', 'forward'), oligo('N1-R', 'reverse'), oligo('N1-P', 'probe')],
     queryCount: 15,
+    diagnostics: [],
   }) as unknown as AnalysisResult;
 
 describe('ResultsPanel', () => {
@@ -126,5 +130,39 @@ describe('ResultsPanel', () => {
   it('states which snapshot of the data the numbers came from', () => {
     render(<ResultsPanel result={result()} />);
     expect(screen.getByText(/1719792000/)).toBeInTheDocument();
+  });
+
+  it('offers no exact-coverage control when there is no transport to run it on', () => {
+    render(<ResultsPanel result={sampleResult} />);
+    expect(screen.queryByRole('button', { name: /extra queries/ })).toBeNull();
+  });
+
+  /**
+   * The whole point of the opt-in path: it must change the *labels* as well as
+   * the bars. A chart redrawn from measured coverage while the table below it
+   * still says the denominator was borrowed is worse than the inferred chart
+   * it replaced.
+   */
+  it('drops every borrowed-denominator label once exact coverage is loaded', async () => {
+    const user = userEvent.setup();
+    const transport: LapisTransport = {
+      async query() {
+        return { data: [{ count: 70387 }], dataVersion: 'v', requestId: 'r' } as never;
+      },
+    };
+    const { container } = render(<ResultsPanel result={sampleResult} transport={transport} />);
+
+    expect(screen.getAllByText(/Per-position coverage not reported/).length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('title')).not.toHaveLength(0);
+
+    await user.click(screen.getByRole('button', { name: /extra queries/ }));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Per-position coverage not reported/)).toBeNull();
+    });
+    // Including the SVG tooltips, which are the only place a sighted user
+    // learns a bar's denominator was borrowed.
+    const titles = [...container.querySelectorAll('title')].map((t) => t.textContent ?? '');
+    expect(titles.filter((t) => t.includes('per-position coverage not reported'))).toEqual([]);
   });
 });

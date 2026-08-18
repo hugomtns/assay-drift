@@ -9,7 +9,11 @@ import {
 
 export type DiagnosticId =
   | 'no-data' | 'small-n' | 'coverage-gap'
-  | 'deposition-lag' | 'geographic-concentration' | 'undated-records';
+  | 'deposition-lag' | 'geographic-concentration' | 'undated-records'
+  // Raised by `runAnalysis` from `guardResponseSize`, not by `computeDiagnostics`:
+  // it describes the shared mutations payload, which belongs to the scope and to
+  // no oligo. It is the one member of this union that is a run-level diagnostic.
+  | 'large-response';
 
 export interface Diagnostic {
   id: DiagnosticId;

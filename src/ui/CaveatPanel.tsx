@@ -53,6 +53,14 @@ export const FIXED_CAVEATS: readonly string[] = [
  */
 function liveDiagnostics(result: AnalysisResult): Diagnostic[] {
   const byId = new Map<string, Diagnostic>();
+  // Run-level first, and not only for ordering: these describe the scope --
+  // the size of the shared mutations payload, and anything added later that is
+  // a property of the query rather than of a binding site -- so if an oligo
+  // ever reports the same `id`, the copy that speaks for the whole run is the
+  // one that belongs under a run-wide heading.
+  for (const diagnostic of result.diagnostics) {
+    if (!byId.has(diagnostic.id)) byId.set(diagnostic.id, diagnostic);
+  }
   for (const oligo of result.oligos) {
     for (const diagnostic of oligo.diagnostics) {
       if (!byId.has(diagnostic.id)) byId.set(diagnostic.id, diagnostic);

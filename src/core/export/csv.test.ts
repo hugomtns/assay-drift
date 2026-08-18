@@ -124,6 +124,7 @@ const result: AnalysisResult = {
   nScope: 71142,
   oligos: [plain, hostile, awkward],
   queryCount: 15,
+  diagnostics: [],
 };
 
 const REQUIRED_SUMMARY_COLUMNS =

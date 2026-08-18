@@ -73,6 +73,39 @@ describe('withCache', () => {
     expect(attempts).toBe(2);
   });
 
+  /**
+   * `runAnalysis` reads `responseBytes` off the mutations response to decide
+   * whether to warn about the payload size. A cache that dropped the field
+   * would make that warning depend on whether the user happened to be the
+   * first person in the session to ask for that scope.
+   */
+  it('carries responseBytes through both the memory hit and the storage hit', async () => {
+    const measuring: LapisTransport = {
+      async query() {
+        return { data: [], dataVersion: 'v', requestId: 'r', responseBytes: 3_270_000 };
+      },
+    };
+    const store = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => { store.set(k, v); },
+      removeItem: (k: string) => { store.delete(k); },
+      clear: () => { store.clear(); },
+      key: () => null,
+      length: 0,
+    } as unknown as Storage;
+
+    const first = withCache(measuring, { storage });
+    expect((await first.query(req)).responseBytes).toBe(3_270_000);
+    // Memory hit.
+    expect((await first.query(req)).responseBytes).toBe(3_270_000);
+    // Storage hit: a fresh wrapper with an empty Map, reading what the first
+    // one mirrored out. The transport underneath would answer anyway, so the
+    // point is that the number survives JSON round-tripping.
+    const second = withCache({ query: () => Promise.reject(new Error('should not be called')) }, { storage });
+    expect((await second.query(req)).responseBytes).toBe(3_270_000);
+  });
+
   it('survives a storage that throws on write', async () => {
     const inner = stubTransport();
     const hostile = {

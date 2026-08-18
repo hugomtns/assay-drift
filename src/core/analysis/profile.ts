@@ -33,12 +33,30 @@ export function rowBelongsToWindow(row: MutationRow, w: WindowSpec): boolean {
   return row.sequenceName === null || row.sequenceName === w.segment;
 }
 
-function statFor(
+/** One reported allele at a position, before any denominator is applied. */
+interface AlleleCount {
+  allele: string;
+  count: number;
+}
+
+/**
+ * The whole per-position computation, expressed over allele counts and a
+ * denominator rather than over LAPIS rows.
+ *
+ * Two callers need it and they differ only in where the denominator comes
+ * from: `buildPositionProfile` takes the `coverage` LAPIS attached to the
+ * mutation rows (or none, and borrows the window's), and `applyExactCoverage`
+ * takes one measured by its own query. Sharing this function is what makes the
+ * exact-coverage path a change of denominator and nothing else -- the mismatch
+ * arithmetic, including the subtraction branch for an oligo that does not
+ * accept the reference base, cannot drift between the two.
+ */
+function statFrom(
   spec: PositionSpec,
-  rows: MutationRow[],
+  alleleCounts: AlleleCount[],
+  coverage: number | null,
   fallbackDenominator: number,
 ): PositionStat {
-  const coverage = rows.length > 0 ? (rows[0] as MutationRow).coverage : null;
   const effectiveDenominator = coverage ?? fallbackDenominator;
 
   // The reference base itself is unusable (non-ACGT), so acceptedAlleles can never
@@ -66,11 +84,11 @@ function statFor(
     };
   }
 
-  const alleles: AlleleStat[] = rows.map((r) => ({
-    allele: r.mutationTo,
-    count: r.count,
-    proportion: effectiveDenominator === 0 ? 0 : r.count / effectiveDenominator,
-    isMismatch: isMismatchAllele(r.mutationTo, spec.plusStrandBase),
+  const alleles: AlleleStat[] = alleleCounts.map((a) => ({
+    allele: a.allele,
+    count: a.count,
+    proportion: effectiveDenominator === 0 ? 0 : a.count / effectiveDenominator,
+    isMismatch: isMismatchAllele(a.allele, spec.plusStrandBase),
   }));
 
   const substitutionCount = alleles
@@ -127,7 +145,53 @@ export function buildPositionProfile(
     if (bucket) bucket.push(row);
     else byPosition.set(row.position, [row]);
   }
-  return w.positions.map((spec) =>
-    statFor(spec, byPosition.get(spec.refPos) ?? [], fallbackDenominator),
-  );
+  return w.positions.map((spec) => {
+    const rows = byPosition.get(spec.refPos) ?? [];
+    return statFrom(
+      spec,
+      rows.map((r) => ({ allele: r.mutationTo, count: r.count })),
+      rows.length > 0 ? (rows[0] as MutationRow).coverage : null,
+      fallbackDenominator,
+    );
+  });
+}
+
+/**
+ * The same profile with measured per-position coverage substituted for the
+ * inferred denominators.
+ *
+ * `fetchExactCoverage` answers the one question the mutations payload cannot:
+ * how many sequences had a definite call at a position *where nothing was
+ * mutated*. LAPIS emits no row for such a position (Part I.1, fact 4), so
+ * `buildPositionProfile` has nothing to read and borrows the window
+ * denominator, flagged as `coverageIsInferred`. A real count clears that flag,
+ * and clearing it is as important as changing the number: the hatching, the
+ * `<title>` tooltips and the "window denominator used" note in the hidden
+ * table all read from it, so a bar redrawn from a measured denominator stops
+ * claiming it borrowed one.
+ *
+ * A position the map does not mention keeps whatever it had. In practice the
+ * map is complete or the fan-out threw, but "measured" must never be inferred
+ * from a missing entry.
+ *
+ * Pure: it returns a new array of new objects and does not touch the input.
+ */
+export function applyExactCoverage(
+  profile: PositionStat[],
+  w: WindowSpec,
+  coverage: ReadonlyMap<number, number>,
+  fallbackDenominator: number,
+): PositionStat[] {
+  return profile.map((stat, i) => {
+    const measured = coverage.get(stat.refPos);
+    if (measured === undefined) return stat;
+    const spec = w.positions[i];
+    if (spec === undefined || spec.refPos !== stat.refPos) return stat;
+    return statFrom(
+      spec,
+      stat.alleles.map((a) => ({ allele: a.allele, count: a.count })),
+      measured,
+      fallbackDenominator,
+    );
+  });
 }

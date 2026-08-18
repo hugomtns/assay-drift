@@ -201,4 +201,9 @@ export const sampleResult: AnalysisResult = {
   nScope: metrics.nScope,
   oligos: [sampleAnalysis],
   queryCount: 7,
+  // Run-level diagnostics. Empty because this fixture's recorded
+  // `nucleotideMutations` response is 400 KB, an order of magnitude under
+  // `MUTATIONS_SIZE_WARN_BYTES` -- and because the fixture transport never saw
+  // a wire, so it reports no size at all.
+  diagnostics: [],
 };

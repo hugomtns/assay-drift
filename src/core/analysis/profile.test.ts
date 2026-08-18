@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildPositionProfile, rowBelongsToWindow } from './profile';
+import { applyExactCoverage, buildPositionProfile, rowBelongsToWindow } from './profile';
 import { buildWindowSpec } from '../query';
 import { findBindingSites, type ReferenceGenome } from '../binding';
 import type { MutationRow } from '../lapis/endpoints';
@@ -150,5 +150,62 @@ describe('buildPositionProfile — ambiguous reference base', () => {
     expect(p.referenceIsAmbiguous).toBe(true);
     expect(p.mismatchCount).toBe(0);
     expect(p.alleles).toEqual([]);
+  });
+});
+
+/**
+ * The opt-in exact-coverage path replaces the borrowed denominator with a
+ * measured one. It has to change the numbers *and* the labels: a bar redrawn
+ * from real coverage while the position still says its denominator was
+ * borrowed is worse than not offering the feature.
+ */
+describe('applyExactCoverage', () => {
+  const w = plusWindow();
+  // Positions 5..12 (1-based), 'ATGCATGC' at index 4 of 'GGGGATGCATGCAAAA'.
+  const inferred = () => buildPositionProfile(w, [row({ position: 5, mutationTo: 'C', count: 50, coverage: 900 })], 1000);
+
+  it('replaces the borrowed denominator and clears the inferred flag', () => {
+    const before = inferred();
+    const noRow = before.find((p) => p.refPos === 6)!;
+    expect(noRow.coverageIsInferred).toBe(true);
+    expect(noRow.effectiveDenominator).toBe(1000);
+
+    const after = applyExactCoverage(before, w, new Map([[6, 800]]), 1000);
+    const fixed = after.find((p) => p.refPos === 6)!;
+    expect(fixed.coverageIsInferred).toBe(false);
+    expect(fixed.coverage).toBe(800);
+    expect(fixed.effectiveDenominator).toBe(800);
+  });
+
+  it('recomputes the mismatch fraction against the measured denominator', () => {
+    const before = inferred();
+    const after = applyExactCoverage(before, w, new Map([[5, 500]]), 1000);
+    const p = after.find((x) => x.refPos === 5)!;
+    expect(p.mismatchCount).toBe(50);
+    expect(p.effectiveDenominator).toBe(500);
+    expect(p.mismatchFraction).toBeCloseTo(50 / 500, 9);
+    expect(p.alleles[0]!.proportion).toBeCloseTo(50 / 500, 9);
+  });
+
+  it('overrides the coverage LAPIS reported, because the two are the same measurement', () => {
+    const before = inferred();
+    const p5 = before.find((x) => x.refPos === 5)!;
+    expect(p5.coverage).toBe(900);
+    const after = applyExactCoverage(before, w, new Map([[5, 905]]), 1000);
+    expect(after.find((x) => x.refPos === 5)!.coverage).toBe(905);
+  });
+
+  it('leaves a position the map does not mention exactly as it was', () => {
+    const before = inferred();
+    const after = applyExactCoverage(before, w, new Map([[5, 500]]), 1000);
+    const untouched = after.find((x) => x.refPos === 7)!;
+    expect(untouched).toEqual(before.find((x) => x.refPos === 7));
+  });
+
+  it('does not mutate the profile it was given', () => {
+    const before = inferred();
+    const snapshot = JSON.stringify(before);
+    applyExactCoverage(before, w, new Map([[5, 500]]), 1000);
+    expect(JSON.stringify(before)).toBe(snapshot);
   });
 });

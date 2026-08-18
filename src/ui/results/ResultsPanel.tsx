@@ -1,7 +1,12 @@
-import { getPathogen } from '../../core/registry';
-import type { AnalysisResult } from '../../core/analysis/run';
+import { useState } from 'react';
+import type { PositionStat } from '../../core/analysis/profile';
+import type { AnalysisResult, OligoAnalysis } from '../../core/analysis/run';
+import type { LapisTransport } from '../../core/lapis/transport';
+import { getPathogen, type PathogenConfig } from '../../core/registry';
+import { scopeToFilters } from '../../core/scope';
 import { CaveatPanel } from '../CaveatPanel';
 import { AttributionTable } from './AttributionTable';
+import { ExactCoverageToggle } from './ExactCoverageToggle';
 import { ExportButtons } from './ExportButtons';
 import { HeadlineCard } from './HeadlineCard';
 import { InsertionNote } from './InsertionNote';
@@ -12,6 +17,80 @@ import { formatCount } from '../format';
 
 interface ResultsPanelProps {
   result: AnalysisResult;
+  /**
+   * The session transport, needed only by the opt-in exact-coverage control.
+   *
+   * Optional because the panel is a pure view of a finished analysis
+   * everywhere else, and most tests render it without one. Absent, the control
+   * is simply not offered -- a button that cannot issue its queries should not
+   * be on screen advertising them.
+   */
+  transport?: LapisTransport;
+}
+
+interface OligoResultProps {
+  analysis: OligoAnalysis;
+  cfg: PathogenConfig;
+  filters: Record<string, unknown>;
+  transport: LapisTransport | undefined;
+}
+
+/**
+ * One oligo's block, and the only stateful thing on this page.
+ *
+ * The state is the exact per-position coverage, if the user asked for it. It
+ * lives here rather than in `PositionProfile` because `PositionProfile` draws
+ * what it is given and gains nothing from knowing where the numbers came from;
+ * feeding it a refined `profile` means the hatching, the `<title>` tooltips
+ * and the hidden table's notes all stop saying "borrowed denominator" together,
+ * with no second code path to keep in step.
+ *
+ * The caller keys this component on the run, so a re-run or a scope change
+ * remounts it: the loaded coverage is dropped and `ExactCoverageToggle`'s
+ * cleanup aborts anything still in flight. That is the reset -- there is no
+ * effect here undoing state after the fact.
+ */
+function OligoResult({ analysis, cfg, filters, transport }: OligoResultProps) {
+  const [exactProfile, setExactProfile] = useState<PositionStat[] | null>(null);
+  const shown: OligoAnalysis =
+    exactProfile === null ? analysis : { ...analysis, profile: exactProfile };
+
+  return (
+    <div className="flex flex-col gap-4 rounded border border-slate-300 p-4">
+      <HeadlineCard analysis={shown} />
+      <SeverityBadge severity={analysis.severity} role={analysis.role} />
+      {transport !== undefined && (
+        <ExactCoverageToggle
+          analysis={analysis}
+          transport={transport}
+          cfg={cfg}
+          filters={filters}
+          onCoverage={setExactProfile}
+        />
+      )}
+      <PositionProfile analysis={shown} />
+      <TrendChart trend={analysis.trend} />
+      {/*
+        Every panel below is repeated once per oligo, so each is named with
+        the oligo it belongs to. Without that a three-oligo result exposes
+        six identically named regions and a landmark list that cannot be
+        used to get anywhere.
+      */}
+      <div className="flex flex-wrap gap-6">
+        <AttributionTable
+          attribution={analysis.lineage}
+          label={cfg.lineageLabel}
+          oligoName={analysis.name}
+        />
+        <AttributionTable attribution={analysis.country} label="Country" oligoName={analysis.name} />
+      </div>
+      <InsertionNote
+        insertions={analysis.insertions}
+        denominator={analysis.metrics.nFullCoverage}
+        oligoName={analysis.name}
+      />
+    </div>
+  );
 }
 
 /**
@@ -35,8 +114,9 @@ interface ResultsPanelProps {
  * answer, and without the version stamp a screenshot of this panel cannot be
  * checked against anything.
  */
-export function ResultsPanel({ result }: ResultsPanelProps) {
+export function ResultsPanel({ result, transport }: ResultsPanelProps) {
   const cfg = getPathogen(result.pathogenId);
+  const filters = scopeToFilters(result.scope, cfg);
 
   return (
     <section aria-labelledby="results-panel-heading" className="flex flex-col gap-6">
@@ -51,34 +131,16 @@ export function ResultsPanel({ result }: ResultsPanelProps) {
       <ExportButtons result={result} />
 
       {result.oligos.map((oligo) => (
-        <div
-          key={oligo.oligoId}
-          className="flex flex-col gap-4 rounded border border-slate-300 p-4"
-        >
-          <HeadlineCard analysis={oligo} />
-          <SeverityBadge severity={oligo.severity} role={oligo.role} />
-          <PositionProfile analysis={oligo} />
-          <TrendChart trend={oligo.trend} />
-          {/*
-            Every panel below is repeated once per oligo, so each is named with
-            the oligo it belongs to. Without that a three-oligo result exposes
-            six identically named regions and a landmark list that cannot be
-            used to get anywhere.
-          */}
-          <div className="flex flex-wrap gap-6">
-            <AttributionTable
-              attribution={oligo.lineage}
-              label={cfg.lineageLabel}
-              oligoName={oligo.name}
-            />
-            <AttributionTable attribution={oligo.country} label="Country" oligoName={oligo.name} />
-          </div>
-          <InsertionNote
-            insertions={oligo.insertions}
-            denominator={oligo.metrics.nFullCoverage}
-            oligoName={oligo.name}
-          />
-        </div>
+        <OligoResult
+          // The generation stamp is part of the key so a re-run is a remount:
+          // exact coverage loaded against the previous scope must not survive
+          // into the next one, and the fan-out it started must be aborted.
+          key={`${result.generatedAt}-${oligo.oligoId}`}
+          analysis={oligo}
+          cfg={cfg}
+          filters={filters}
+          transport={transport}
+        />
       ))}
 
       <CaveatPanel result={result} />

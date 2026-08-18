@@ -482,7 +482,12 @@ export default function App() {
     content = (
       <div className="flex flex-col gap-6">
         <CopyLinkButton />
-        <ResultsPanel result={result} />
+        {/*
+          The same session transport the analysis ran on, so the opt-in
+          exact-coverage fan-out shares its cache and its in-flight
+          de-duplication rather than opening a second, uncached path to LAPIS.
+        */}
+        <ResultsPanel result={result} transport={transport} />
       </div>
     );
   }

@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { runAnalysis } from './run';
 import { findBindingSites } from '../binding';
+import { withCache } from '../lapis/caching-transport';
+import { MUTATIONS_SIZE_WARN_BYTES } from '../lapis/size-guard';
 import type { LapisRequest, LapisTransport } from '../lapis/transport';
 import type { ReferenceGenome } from '../reference';
 import type { Scope } from '../scope';
@@ -117,5 +119,125 @@ describe('runAnalysis', () => {
     await expect(
       runAnalysis({ transport: failing, scope, oligos: [oligo()], reference: REF }),
     ).rejects.toThrow('network down');
+  });
+});
+
+/**
+ * The heavy request is `nucleotideMutations` with `minProportion: 0` -- 3.3 MB
+ * raw for a one-month SARS-CoV-2 scope. It is a function of the *scope* alone,
+ * so it must be paid for once however many oligos or analyses are run over that
+ * scope.
+ *
+ * Every count below is taken at `seen`, which is the transport *underneath*
+ * `withCache`. Counting at the wrapper would prove nothing: `withCache`
+ * de-duplicates by request key, so a doubled call and a single call look
+ * identical from above.
+ *
+ * What is proven is the **in-memory** cache. `withCache` also mirrors into
+ * `sessionStorage`, but that is ~5 MB total and a 3.3 MB mutations entry
+ * either fills it or throws `QuotaExceededError`; the second test pins that
+ * degrading to memory-only is not a regression but the designed behaviour.
+ */
+describe('the mutations payload is fetched once per scope', () => {
+  // Sliced out of REF rather than typed, so this is a second oligo that really
+  // binds and no sequence is written from memory (Global Constraint 2).
+  const secondOligo = () => {
+    const sequence = (REF.segments[0] as { sequence: string }).sequence.slice(99, 116);
+    const site = findBindingSites(sequence, REF)[0]!;
+    return { id: 'o2', name: 'Test-R', role: 'reverse' as const, sequence, site };
+  };
+
+  const countMutationRequests = (seen: LapisRequest[]) =>
+    seen.filter((r) => r.endpoint === 'nucleotideMutations').length;
+
+  it('issues one nucleotideMutations request for two analyses of the same scope with different oligos', async () => {
+    const { transport, seen } = scriptedTransport();
+    const cached = withCache(transport, { storage: null });
+
+    const first = await runAnalysis({ transport: cached, scope, oligos: [oligo()], reference: REF });
+    const second = await runAnalysis({
+      transport: cached, scope, oligos: [secondOligo()], reference: REF,
+    });
+
+    expect(countMutationRequests(seen)).toBe(1);
+    // The oligos really are different, so this is not one analysis run twice.
+    expect(first.oligos[0]!.window.positions).not.toHaveLength(
+      second.oligos[0]!.window.positions.length,
+    );
+    // And the shared payload still reached both: each has a real profile.
+    expect(first.oligos[0]!.profile.length).toBeGreaterThan(0);
+    expect(second.oligos[0]!.profile.length).toBeGreaterThan(0);
+  });
+
+  it('still shares it when writing to sessionStorage throws QuotaExceededError', async () => {
+    const { transport, seen } = scriptedTransport();
+    const setItem = vi.fn(() => {
+      throw new DOMException('quota', 'QuotaExceededError');
+    });
+    const storage = {
+      getItem: () => null,
+      setItem,
+      removeItem: () => undefined,
+      clear: () => undefined,
+      key: () => null,
+      length: 0,
+    } as unknown as Storage;
+    const cached = withCache(transport, { storage });
+
+    await runAnalysis({ transport: cached, scope, oligos: [oligo()], reference: REF });
+    await runAnalysis({ transport: cached, scope, oligos: [secondOligo()], reference: REF });
+
+    expect(setItem).toHaveBeenCalled();
+    expect(countMutationRequests(seen)).toBe(1);
+  });
+});
+
+describe('the response-size guard', () => {
+  const sized = (bytes: number | undefined) => {
+    const { transport } = scriptedTransport();
+    return {
+      async query(req: LapisRequest) {
+        const res = await transport.query(req);
+        if (req.endpoint !== 'nucleotideMutations' || bytes === undefined) return res;
+        return { ...res, responseBytes: bytes };
+      },
+    } as LapisTransport;
+  };
+
+  it('raises no run-level diagnostic for a payload under the threshold', async () => {
+    const result = await runAnalysis({
+      transport: sized(3_270_000), scope, oligos: [oligo()], reference: REF,
+    });
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('raises one info diagnostic on the result, not on an oligo, when the payload is large', async () => {
+    const result = await runAnalysis({
+      transport: sized(MUTATIONS_SIZE_WARN_BYTES + 1), scope, oligos: [oligo()], reference: REF,
+    });
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]).toMatchObject({ id: 'large-response', severity: 'info' });
+    expect(result.diagnostics[0]!.message).toContain('nucleotideMutations');
+    // It is a property of the scope, so it must not name an oligo, and no
+    // oligo may carry it.
+    expect(result.diagnostics[0]!.message).not.toContain('Test-F');
+    for (const o of result.oligos) {
+      expect(o.diagnostics.map((d) => d.id)).not.toContain('large-response');
+    }
+  });
+
+  it('stays silent when the transport did not measure anything', async () => {
+    // A fixture transport replays a recorded object and never saw a wire.
+    // Unmeasured is not the same as small, and must not become a claim.
+    const result = await runAnalysis({
+      transport: sized(undefined), scope, oligos: [oligo()], reference: REF,
+    });
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('does not change the number of queries an analysis issues', async () => {
+    const { transport, seen } = scriptedTransport();
+    await runAnalysis({ transport, scope, oligos: [oligo()], reference: REF });
+    expect(seen).toHaveLength(7);
   });
 });

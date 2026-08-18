@@ -1,3 +1,4 @@
+import { utf8ByteLength } from './size-guard';
 import type { LapisRequest, LapisResponse, LapisTransport } from './transport';
 
 export class LapisError extends Error {
@@ -52,11 +53,28 @@ export function createFetchTransport(
         });
 
         if (res.ok) {
-          const body = (await res.json()) as SuccessBody<T>;
+          // `res.text()` then `JSON.parse`, rather than `res.json()`, because
+          // this is the only place in the chain where the size of a response
+          // is still knowable. `res.json()` discards the text before returning
+          // and `LapisResponse` never sees a byte count; `Content-Length` is
+          // the gzipped figure and answers a different question.
+          //
+          // The cost is one string held alive across the parse. In Node and
+          // undici that is what `res.json()` does internally anyway
+          // (`JSON.parse(await this.text())`), so on the heaviest payload --
+          // the 3.3 MB mutations response -- this is the same peak in
+          // practice; a browser engine that parses straight from bytes would
+          // pay one transient string more. It is paid for a real number
+          // instead of an estimate extrapolated from a row count, which is the
+          // only alternative that does not touch the text at all.
+          const text = await res.text();
+          const body = JSON.parse(text) as SuccessBody<T>;
           return {
             data: body.data,
             dataVersion: body.info?.dataVersion ?? 'unknown',
             requestId: body.info?.requestId ?? 'unknown',
+            // Measured without allocating a copy of `text`. See `size-guard.ts`.
+            responseBytes: utf8ByteLength(text),
           };
         }
 

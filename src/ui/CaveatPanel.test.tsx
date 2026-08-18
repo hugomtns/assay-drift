@@ -4,7 +4,7 @@ import { CaveatPanel, FIXED_CAVEATS } from './CaveatPanel';
 import type { AnalysisResult } from '../core/analysis/run';
 
 const result = (diagnostics: { id: string; severity: string; message: string }[]) =>
-  ({ oligos: [{ diagnostics }, { diagnostics }] } as unknown as AnalysisResult);
+  ({ oligos: [{ diagnostics }, { diagnostics }], diagnostics: [] } as unknown as AnalysisResult);
 
 describe('CaveatPanel', () => {
   it('renders every fixed caveat', () => {
@@ -58,6 +58,7 @@ describe('CaveatPanel', () => {
           ],
         },
       ],
+      diagnostics: [],
     } as unknown as AnalysisResult;
 
     render(<CaveatPanel result={twoOligos} />);
@@ -66,6 +67,37 @@ describe('CaveatPanel', () => {
     expect(gaps).toHaveLength(1);
     expect(gaps[0]).toContain('N1-F');
     expect(gaps[0]).not.toMatch(/\bthis binding site\b/);
+  });
+
+  /**
+   * The response-size warning belongs to the scope, so it arrives on the
+   * result rather than on an oligo. It has to be shown, and it has to be shown
+   * once however many oligos the run carries.
+   */
+  it('shows run-level diagnostics alongside the per-oligo ones', () => {
+    const withRunLevel = {
+      oligos: [{ name: 'N1-F', diagnostics: [] }, { name: 'N1-R', diagnostics: [] }],
+      diagnostics: [
+        { id: 'large-response', severity: 'info', message: 'The mutation data is about 12.0 MB.' },
+      ],
+    } as unknown as AnalysisResult;
+
+    render(<CaveatPanel result={withRunLevel} />);
+    expect(screen.getAllByText(/about 12.0 MB/)).toHaveLength(1);
+  });
+
+  it('de-duplicates a run-level diagnostic against an oligo carrying the same id', () => {
+    const both = {
+      oligos: [
+        { name: 'N1-F', diagnostics: [{ id: 'large-response', severity: 'info', message: 'oligo copy' }] },
+      ],
+      diagnostics: [{ id: 'large-response', severity: 'info', message: 'run copy' }],
+    } as unknown as AnalysisResult;
+
+    render(<CaveatPanel result={both} />);
+    // Run level wins: it is the one that speaks for the scope.
+    expect(screen.getByText(/run copy/)).toBeInTheDocument();
+    expect(screen.queryByText(/oligo copy/)).toBeNull();
   });
 
   it('covers the four caveats the brief requires', () => {
