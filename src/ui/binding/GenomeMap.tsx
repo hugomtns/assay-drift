@@ -1,3 +1,5 @@
+import { formatCount } from '../format';
+
 export interface GenomeMapSite {
   /** Short name shown to the user, normally the oligo's name. */
   label: string;
@@ -14,9 +16,6 @@ interface GenomeMapProps {
   segmentLength: number;
   sites: readonly GenomeMapSite[];
 }
-
-/** Explicit locale so the grouping separator does not depend on the host. */
-const format = (n: number) => n.toLocaleString('en-US');
 
 /**
  * One segment drawn as a horizontal bar with a tick per binding site, so the
@@ -49,7 +48,7 @@ export function GenomeMap({ segmentLabel, segmentLength, sites }: GenomeMapProps
     <figure className="flex flex-col gap-1" aria-label={`Binding-site map for ${segmentLabel}`}>
       <figcaption className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
         <span className="font-medium text-slate-900">{segmentLabel}</span>
-        <span className="text-slate-600">{format(segmentLength)} nt</span>
+        <span className="text-slate-600">{formatCount(segmentLength)} nt</span>
       </figcaption>
 
       <div className="relative h-6 w-full rounded bg-slate-200">
@@ -58,7 +57,7 @@ export function GenomeMap({ segmentLabel, segmentLength, sites }: GenomeMapProps
           const width = ((site.end - site.start + 1) / span) * 100;
           // One line: assistive technology reads it as a single name, and the
           // coordinates stay next to the label they belong to.
-          const description = `${site.label}: ${format(site.start)}–${format(site.end)} (${site.strand} strand)`;
+          const description = `${site.label}: ${formatCount(site.start)}–${formatCount(site.end)} (${site.strand} strand)`;
           return (
             <div
               key={`${site.label}\0${site.start}\0${site.end}\0${site.strand}`}

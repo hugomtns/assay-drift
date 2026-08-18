@@ -27,6 +27,47 @@ describe('CaveatPanel', () => {
     expect(screen.getAllByText('Recent months are thin.')).toHaveLength(1);
   });
 
+  /**
+   * The de-duplication keeps the first oligo's copy of a per-site diagnostic,
+   * so that copy has to say which oligo it came from. Under a heading that
+   * speaks for the whole run, "this binding site" points at nothing.
+   */
+  it('shows which oligo a per-site diagnostic came from', () => {
+    const twoOligos = {
+      oligos: [
+        {
+          name: 'N1-F',
+          diagnostics: [
+            {
+              id: 'coverage-gap',
+              severity: 'warn',
+              message:
+                'A large share of the sequences in scope have an ambiguous base somewhere in the N1-F binding site, so they are excluded from its rate.',
+            },
+          ],
+        },
+        {
+          name: 'N1-R',
+          diagnostics: [
+            {
+              id: 'coverage-gap',
+              severity: 'warn',
+              message:
+                'A large share of the sequences in scope have an ambiguous base somewhere in the N1-R binding site, so they are excluded from its rate.',
+            },
+          ],
+        },
+      ],
+    } as unknown as AnalysisResult;
+
+    render(<CaveatPanel result={twoOligos} />);
+    const shown = screen.getAllByRole('listitem').map((li) => li.textContent ?? '');
+    const gaps = shown.filter((text) => text.includes('ambiguous base somewhere in'));
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0]).toContain('N1-F');
+    expect(gaps[0]).not.toMatch(/\bthis binding site\b/);
+  });
+
   it('covers the four caveats the brief requires', () => {
     render(<CaveatPanel result={result([])} />);
     const text = document.body.textContent ?? '';

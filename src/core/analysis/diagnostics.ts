@@ -1,3 +1,4 @@
+import { formatCount } from '../format';
 import type { Attribution } from './attribution';
 import type { WindowMetrics } from './metrics';
 import type { TrendSeries } from './trend';
@@ -25,12 +26,32 @@ function median(values: number[]): number {
     : (sorted[mid] as number);
 }
 
+/**
+ * No message here prints a percentage, and that is a rule rather than an
+ * accident.
+ *
+ * `src/core/` must not import from `src/ui/`, so the only percentage available
+ * to this module is a hand-rolled one -- and the hand-rolled one this file used
+ * to carry, `Math.round(fraction * 100)`, rendered a real 0.4% coverage gap as
+ * "0%": the word "none" in a sentence whose entire job is to report a gap.
+ * That is exactly the failure `formatPercent`'s `<0.1%` rule exists to
+ * prevent. Rather than reimplement that rule in a second place, these messages
+ * state counts, which they already had, and leave every rate to the UI.
+ *
+ * `oligoName` is required, not optional, because `CaveatPanel` de-duplicates
+ * diagnostics by `id` and keeps the first occurrence. Several of these are
+ * properties of one *binding site*, not of the run, so with three oligos the
+ * panel would otherwise quote one oligo's numbers under the words "this site"
+ * with nothing on screen saying which oligo that was.
+ */
 export function computeDiagnostics(input: {
+  /** The oligo whose site these diagnostics describe. */
+  oligoName: string;
   metrics: WindowMetrics;
   trend: TrendSeries;
   country: Attribution;
 }): Diagnostic[] {
-  const { metrics, trend, country } = input;
+  const { oligoName, metrics, trend, country } = input;
   const out: Diagnostic[] = [];
 
   if (metrics.nScope === 0) {
@@ -44,14 +65,22 @@ export function computeDiagnostics(input: {
   if (!metrics.sufficientData) {
     out.push({
       id: 'small-n', severity: 'warn',
-      message: `Only ${metrics.nFullCoverage} sequences can be assessed at this site (minimum ${MIN_DENOMINATOR}). Treat any rate as indicative only.`,
+      // Bare, not formatted: this branch only fires below MIN_DENOMINATOR, so
+      // the count is at most two digits and there is nothing to group.
+      message: `Only ${metrics.nFullCoverage} sequences can be assessed at the ${oligoName} binding site (minimum ${MIN_DENOMINATOR}). Treat any rate as indicative only.`,
     });
   }
 
   if (metrics.coverageGapFraction > COVERAGE_GAP_WARN) {
     out.push({
       id: 'coverage-gap', severity: 'warn',
-      message: `${metrics.coverageGap} of ${metrics.nScope} sequences (${Math.round(metrics.coverageGapFraction * 100)}%) have an ambiguous base somewhere in this binding site and are excluded. A mutation there would not be visible.`,
+      // Deliberately carries no arithmetic. `HeadlineCard` states the gap as a
+      // count and a rate, unconditionally, on the oligo's own card; this
+      // sentence used to restate the same figures almost word for word one
+      // screen further down, which reads as two separate findings. The card is
+      // authoritative for the numbers, this is authoritative for the
+      // consequence.
+      message: `A large share of the sequences in scope have an ambiguous base somewhere in the ${oligoName} binding site, so they are excluded from its rate. A mutation at one of those positions would not be visible. The counts are on that oligo's card.`,
     });
   }
 
@@ -71,14 +100,14 @@ export function computeDiagnostics(input: {
     const top = country.rows[0] as { value: string; count: number };
     out.push({
       id: 'geographic-concentration', severity: 'warn',
-      message: `${Math.round(country.topShare * 100)}% of the mismatch-carrying sequences come from ${top.value}. This may reflect where sequencing happens rather than where the variant circulates.`,
+      message: `${formatCount(top.count)} of the ${formatCount(country.total)} sequences carrying a mismatch in the ${oligoName} binding site come from ${top.value}. This may reflect where sequencing happens rather than where the variant circulates.`,
     });
   }
 
   if (trend.undatedFullCoverage > 0) {
     out.push({
       id: 'undated-records', severity: 'info',
-      message: `${trend.undatedFullCoverage} assessable sequences carry no usable collection date and appear in the headline figure but not in the trend.`,
+      message: `${formatCount(trend.undatedFullCoverage)} sequences assessable at the ${oligoName} binding site carry no usable collection date and appear in the headline figure but not in the trend.`,
     });
   }
 

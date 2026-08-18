@@ -6,6 +6,7 @@ import { getPathogen } from '../../core/registry';
 import { resolveBindingSite, type Resolution } from '../../core/resolution';
 import { loadReference, referenceFetchedAt } from '../../data/references';
 import { useAppStore } from '../../state/store';
+import { formatCount } from '../format';
 import { GenomeMap, type GenomeMapSite } from './GenomeMap';
 
 const ROLE_LABELS: Readonly<Record<OligoRole, string>> = {
@@ -21,9 +22,6 @@ const STATUS_LABELS: Readonly<Record<Resolution['status'], string>> = {
   'highly-degenerate': 'Needs confirmation',
 };
 
-/** Explicit locale so the grouping separator does not depend on the host. */
-const format = (n: number) => n.toLocaleString('en-US');
-
 const siteKey = (site: BindingSite) => `${site.segment}:${site.start}-${site.end}:${site.strand}`;
 
 /**
@@ -33,7 +31,7 @@ const siteKey = (site: BindingSite) => `${site.segment}:${site.start}-${site.end
  * indistinguishable from a 0-based half-open range.
  */
 const describeSite = (site: BindingSite) =>
-  `${site.segment}: ${format(site.start)}–${format(site.end)} (${site.strand} strand)`;
+  `${site.segment}: ${formatCount(site.start)}–${formatCount(site.end)} (${site.strand} strand)`;
 
 const describeMismatches = (site: BindingSite) =>
   site.mismatches === 1
@@ -360,7 +358,7 @@ export function BindingResolution() {
             Assay geometry
           </h3>
           {geometry.ampliconLength !== null && (
-            <p className="text-sm text-slate-700">{`Amplicon: ${format(geometry.ampliconLength)} nt`}</p>
+            <p className="text-sm text-slate-700">{`Amplicon: ${formatCount(geometry.ampliconLength)} nt`}</p>
           )}
           {geometry.problems.length > 0 && (
             <>

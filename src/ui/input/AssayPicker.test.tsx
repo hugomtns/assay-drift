@@ -83,4 +83,31 @@ describe('AssayPicker', () => {
     expect(citation).toHaveAttribute('href', 'https://stacks.cdc.gov/view/cdc/84525');
     expect(citation).toHaveAttribute('rel', 'noreferrer');
   });
+
+  /**
+   * The WHO titles in the library are a paragraph long. As link text they made
+   * an unreadable link and a worse screen-reader announcement, so the visible
+   * name is the publishing body and the full title moved to the anchor's
+   * `title`, which assistive technology exposes as a description rather than
+   * as the name.
+   */
+  it('keeps the citation link short without losing the full title', () => {
+    render(<AssayPicker />);
+
+    for (const link of screen.getAllByRole('link')) {
+      const name = link.textContent ?? '';
+      expect(name.length).toBeLessThan(60);
+      // The full title is still reachable, and is longer than the label.
+      const full = link.getAttribute('title') ?? '';
+      expect(full.length).toBeGreaterThan(0);
+      expect(full.length).toBeGreaterThan(name.length);
+    }
+
+    const who = screen
+      .getByRole('button', { name: 'WHO A(H3) HA (H3-266/H3-373)' })
+      .closest('li') as HTMLElement;
+    const link = within(who).getByRole('link');
+    expect(link).toHaveTextContent('Source: World Health Organization');
+    expect(link.getAttribute('title')).toContain('Annex 2 Protocol 2');
+  });
 });

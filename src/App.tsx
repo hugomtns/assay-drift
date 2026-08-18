@@ -77,7 +77,7 @@ function analysisOligos(state: ReturnType<typeof useAppStore.getState>): Analysi
 }
 
 const messageOf = (err: unknown): string =>
-  err instanceof Error ? err.message : `Unexpected failure: ${String(err)}`;
+  err instanceof Error ? err.message : `Unexpected error: ${String(err)}`;
 
 /** Everything a decoded link has to become before the store will accept it. */
 interface RestoredQuery {

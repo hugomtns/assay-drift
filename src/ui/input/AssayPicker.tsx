@@ -17,6 +17,28 @@ const LIBRARY = parseLibrary(libraryRaw);
 const PATHOGEN_ORDER = Object.keys(PATHOGENS) as PathogenId[];
 
 /**
+ * A link label short enough to read and to hear.
+ *
+ * The full `citation.title` used to be the link text, and the WHO titles in
+ * the library run to a paragraph -- "WHO information for the molecular
+ * detection of influenza viruses (2024), Annex 2 Protocol 2, table 'Primers
+ * and probes used for detecting influenza A subtype H1pdm09 and H3 viruses'
+ * (p. 25)". A screen reader announces a link by its whole name, so that was a
+ * paragraph read aloud for every entry in the list.
+ *
+ * `citation.source` opens with the publishing body and then qualifies it after
+ * a comma, a semicolon or a bracket, so everything from the first of those
+ * onwards is the qualification: "US Centers for Disease Control and
+ * Prevention", "Corman VM et al.", "World Health Organization". The full title
+ * stays on the anchor's `title` attribute, which is exposed as the link's
+ * accessible *description* -- available on demand, not read out first.
+ */
+function shortSource(source: string): string {
+  const head = source.split(/[,;(]/)[0];
+  return head === undefined || head.trim() === '' ? source : head.trim();
+}
+
+/**
  * Step 1's alternative to pasting: pick a published assay whose sequences have
  * been transcribed from a cited source and machine-verified against the bundled
  * reference (`docs/assay-sources.md`, Global Constraint 2).
@@ -98,9 +120,10 @@ export function AssayPicker() {
                     href={assay.citation.url}
                     target="_blank"
                     rel="noreferrer"
+                    title={assay.citation.title}
                     className="text-sm text-slate-700 underline"
                   >
-                    {`Source: ${assay.citation.title}`}
+                    {`Source: ${shortSource(assay.citation.source)}`}
                   </a>
                 </li>
               ))}

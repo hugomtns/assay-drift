@@ -1,6 +1,6 @@
 import { useId } from 'react';
 import type { WindowInsertion } from '../../core/analysis/insertions';
-import { formatCount, formatPercent } from './format';
+import { formatCount, formatPercent } from '../format';
 
 interface InsertionNoteProps {
   insertions: WindowInsertion[];

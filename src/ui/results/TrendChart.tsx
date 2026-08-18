@@ -1,6 +1,6 @@
 import { useId } from 'react';
 import type { TrendPoint, TrendSeries } from '../../core/analysis/trend';
-import { formatCount, formatPercent } from './format';
+import { formatCount, formatPercent } from '../format';
 
 /**
  * Hand-written SVG, for the same reason as the position profile: this is one
@@ -41,6 +41,20 @@ function runsOf(points: TrendPoint[]): Run[] {
     current.points.push({ index, fraction: p.mismatchFraction });
   });
   return runs;
+}
+
+/**
+ * What the hidden table's rate column says for one bucket.
+ *
+ * A thin bucket must read as words, not as `formatPercent`'s em dash. This
+ * cell *is* the whole announcement a screen reader hears for the rate of that
+ * month -- the SVG beside it is `aria-hidden`, so there is nothing else -- and
+ * "dash" is not a statement about anything. The counts are in the two cells to
+ * its left, under their own column headers, and the caption names the series.
+ */
+function rateCell(p: TrendPoint): string {
+  if (p.mismatchFraction === null) return 'Not enough data';
+  return formatPercent(p.mismatchFraction);
 }
 
 interface TrendChartProps {
@@ -165,7 +179,7 @@ export function TrendChart({ trend }: TrendChartProps) {
               <th scope="row">{p.bucket}</th>
               <td>{formatCount(p.nMismatch)}</td>
               <td>{formatCount(p.nFullCoverage)}</td>
-              <td>{formatPercent(p.mismatchFraction)}</td>
+              <td>{rateCell(p)}</td>
             </tr>
           ))}
         </tbody>

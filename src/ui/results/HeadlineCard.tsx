@@ -2,7 +2,7 @@ import { useId } from 'react';
 import { UNIT_OF_ANALYSIS } from '../../core/analysis/constants';
 import type { OligoAnalysis } from '../../core/analysis/run';
 import type { OligoRole } from '../../core/oligo-input';
-import { formatCount, formatPercent } from './format';
+import { formatCount, formatPercent, formatRate } from '../format';
 
 const ROLE_LABELS: Readonly<Record<OligoRole, string>> = {
   forward: 'Forward primer',
@@ -17,11 +17,14 @@ interface HeadlineCardProps {
 /**
  * One oligo's headline number.
  *
- * The percentage and the two counts it was computed from are rendered inside
- * the *same* element, not merely on the same screen: Global Constraint 5 says
- * a percentage never appears without its absolute numbers, and the cheapest
- * way to guarantee that is to make them physically inseparable. Nothing here
- * can be rearranged into a layout that shows one without the other.
+ * The percentage and the two counts it was computed from are produced by a
+ * single `formatRate` call and rendered as one string inside one element --
+ * `95.9% (67,520 of 70,387)`. Global Constraints 4 and 6 say a percentage
+ * never appears without its absolute numbers "in the same visual unit", and
+ * this is the single most quotable string in the product: it gets
+ * screenshotted, pasted into a message and read aloud on its own. Two sibling
+ * elements would satisfy the rule only as long as nobody rearranged them; one
+ * string cannot be separated at all.
  *
  * Three states, decided here rather than inside `formatPercent`, because two
  * of them must not print a percentage *at all* — not even a hedged one:
@@ -52,7 +55,11 @@ export function HeadlineCard({ analysis }: HeadlineCardProps) {
     ? 'No assessable sequences'
     : !metrics.sufficientData
       ? `Insufficient data (n = ${formatCount(metrics.nFullCoverage)})`
-      : formatPercent(metrics.mismatchFraction);
+      : formatRate({
+          fraction: metrics.mismatchFraction,
+          numerator: metrics.nMismatch,
+          denominator: metrics.nFullCoverage,
+        });
 
   return (
     <article
@@ -69,7 +76,7 @@ export function HeadlineCard({ analysis }: HeadlineCardProps) {
       <div aria-label="Headline mismatch rate" className="flex flex-col gap-1">
         <p className="text-3xl font-semibold text-slate-900">{rate}</p>
         <p className="text-sm text-slate-700">
-          {`n = ${formatCount(metrics.nMismatch)} of ${formatCount(metrics.nFullCoverage)} assessable sequences`}
+          Sequences carrying at least one mismatch, out of those assessable at this site.
         </p>
       </div>
 

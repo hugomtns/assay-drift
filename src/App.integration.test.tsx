@@ -58,8 +58,11 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getAllByText(/assessable sequences/i).length).toBeGreaterThan(0);
     });
+    // Task 6.1 moved the counts inside the percentage's own string, so the
+    // headline now reads "100.0% (1,000 of 1,000)". The assertion still pins
+    // the numerator and the denominator; it is the rendering that changed.
     expect(screen.getByLabelText('Headline mismatch rate')).toHaveTextContent(
-      'n = 1,000 of 1,000 assessable sequences',
+      '(1,000 of 1,000)',
     );
   });
 
@@ -167,7 +170,7 @@ describe('App worked example', () => {
     const headlines = screen.getAllByLabelText('Headline mismatch rate');
     expect(headlines).toHaveLength(3);
     for (const headline of headlines) {
-      expect(headline).toHaveTextContent('n = 4,000 of 4,000 assessable sequences');
+      expect(headline).toHaveTextContent('(4,000 of 4,000)');
     }
   });
 

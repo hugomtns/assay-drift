@@ -1,6 +1,6 @@
 import { useId } from 'react';
 import type { Attribution } from '../../core/analysis/attribution';
-import { formatCount, formatPercent } from './format';
+import { formatCount, formatPercent } from '../format';
 
 interface AttributionTableProps {
   attribution: Attribution;

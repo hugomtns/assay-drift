@@ -2,7 +2,7 @@ import { useId } from 'react';
 import { THREE_PRIME_CRITICAL } from '../../core/analysis/constants';
 import type { PositionStat } from '../../core/analysis/profile';
 import type { OligoAnalysis } from '../../core/analysis/run';
-import { formatCount, formatPercent } from './format';
+import { formatCount, formatPercent } from '../format';
 
 /**
  * Hand-written SVG rather than a charting library. This is a row of stacked

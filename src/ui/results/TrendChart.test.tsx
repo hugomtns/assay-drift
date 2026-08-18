@@ -110,4 +110,23 @@ describe('TrendChart', () => {
     );
     expect(screen.getByText(/42/)).toHaveTextContent(/no usable collection date/i);
   });
+
+  /**
+   * `formatPercent(null)` renders an em dash, which is fine wherever
+   * `formatRate` states the numbers beside it. Here there is nothing beside
+   * it: the SVG is aria-hidden, so this cell is the entire announcement of the
+   * rate for that bucket, and a cell that reads "dash" says nothing at all.
+   * This test exists so that a later tidy-up cannot quietly put the dash back.
+   */
+  it('never lets a bare em dash be the whole rate cell', () => {
+    render(
+      <TrendChart
+        trend={trend([point('2024-01', 1000, 100), thin('2024-02', 20, 3)])}
+      />,
+    );
+    const cells = bodyRows().map((row) => row.querySelectorAll('td')[2]?.textContent ?? '');
+    expect(cells[1]).toBe('Not enough data');
+    expect(cells[1]).not.toContain('—');
+    expect(cells[0]).toBe('10.0%');
+  });
 });

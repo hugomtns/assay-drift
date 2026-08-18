@@ -123,7 +123,7 @@ export async function runAnalysis(input: {
       insertions: insertionsInWindow(w, insertionRows, metrics.nFullCoverage),
       trend, lineage, country,
       severity: scoreSeverity({ role: o.role, metrics, profile }),
-      diagnostics: computeDiagnostics({ metrics, trend, country }),
+      diagnostics: computeDiagnostics({ oligoName: o.name, metrics, trend, country }),
     };
   });
 

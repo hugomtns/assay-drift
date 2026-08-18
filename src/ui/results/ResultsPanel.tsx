@@ -8,7 +8,7 @@ import { InsertionNote } from './InsertionNote';
 import { PositionProfile } from './PositionProfile';
 import { SeverityBadge } from './SeverityBadge';
 import { TrendChart } from './TrendChart';
-import { formatCount } from './format';
+import { formatCount } from '../format';
 
 interface ResultsPanelProps {
   result: AnalysisResult;

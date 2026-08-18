@@ -40,10 +40,16 @@ export const FIXED_CAVEATS: readonly string[] = [
  * deposition lag, geographic concentration, undated records -- so with three
  * oligos over one dataset the same warning is produced three times, and
  * printing it three times would read as three separate problems. First
- * occurrence wins, which keeps the wording of whichever oligo raised it first
- * (they differ in the numbers they quote for the per-site ones, e.g.
- * `coverage-gap`); the per-oligo detail belongs on that oligo's own card, not
- * in the panel that speaks for the whole run.
+ * occurrence wins.
+ *
+ * The others -- `small-n`, `coverage-gap`, `geographic-concentration`,
+ * `undated-records` -- are properties of one *binding site*, so first-wins
+ * means one oligo speaks for the panel. That is only safe because
+ * `computeDiagnostics` now names the oligo in every one of those messages;
+ * they used to say "this binding site" under a heading that speaks for the
+ * whole run, with nothing on screen saying which site. Any per-site diagnostic
+ * added later must name its oligo too, or this de-duplication will silently
+ * mislabel it.
  */
 function liveDiagnostics(result: AnalysisResult): Diagnostic[] {
   const byId = new Map<string, Diagnostic>();

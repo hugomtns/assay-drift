@@ -315,7 +315,7 @@ export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
     // is included would be false while they are still applied.
     optionsMessage = `The ${listNames} lists could not be loaded. Your filters are still being applied: ${retained.join(', ')}.`;
   } else if (failed) {
-    optionsMessage = `The ${listNames} lists could not be loaded. Leaving both empty analyses everything, so you can still continue.`;
+    optionsMessage = `The ${listNames} lists could not be loaded. You can still continue: with both filters left empty, the analysis covers everything.`;
   } else if (unmatched.length > 0) {
     // Reachable in practice only from a shared link, which is why the message
     // says so: a value the user picked came from the list by construction.

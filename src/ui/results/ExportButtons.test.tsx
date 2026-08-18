@@ -3,63 +3,20 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ExportButtons } from './ExportButtons';
 import { UNIT_OF_ANALYSIS } from '../../core/analysis/constants';
-import { buildAttribution } from '../../core/analysis/attribution';
-import { computeDiagnostics } from '../../core/analysis/diagnostics';
-import { computeWindowMetrics } from '../../core/analysis/metrics';
-import { buildPositionProfile } from '../../core/analysis/profile';
-import { scoreSeverity } from '../../core/analysis/severity';
-import { buildTrend } from '../../core/analysis/trend';
-import type { AnalysisResult, OligoAnalysis } from '../../core/analysis/run';
+import { sampleResult } from '../../core/analysis/test-fixtures';
+import type { AnalysisResult } from '../../core/analysis/run';
 import { methodsParagraph } from '../../core/export/methods';
-import { findBindingSites } from '../../core/binding';
-import { buildWindowSpec } from '../../core/query';
-import { loadReference } from '../../data/references';
 
 /**
- * A real oligo, cut out of the bundled reference at the G1 window
- * (21765..21786, 1-based inclusive) rather than written out here, so no
- * genomic sequence is typed anywhere in this file (Global Constraint 2).
+ * The shared G1 fixture, with only the timestamp overridden: these tests are
+ * about the filename the buttons stamp, and that has to be the result's date
+ * rather than today's. Everything else -- the oligo cut out of the bundled
+ * reference, the real counts, the 22-position profile -- comes from
+ * `src/core/analysis/test-fixtures`.
  */
-const reference = loadReference('sars-cov-2');
-const SEQUENCE = reference.segments[0]!.sequence.slice(21764, 21786);
-const site = findBindingSites(SEQUENCE, reference)[0]!;
-const windowSpec = buildWindowSpec(site, SEQUENCE, reference, 'forward', { segmented: false });
-const metrics = computeWindowMetrics({ nScope: 71142, nFullCoverage: 70387, nMismatch: 67520 });
-const profile = buildPositionProfile(windowSpec, [], metrics.nFullCoverage);
-const trend = buildTrend({
-  coverageRows: [], mismatchRows: [], dateField: 'date',
-  dateFrom: '2021-02-01', dateTo: '2021-03-01',
-});
-const country = buildAttribution([{ count: 67520, country: 'United Kingdom' }], 'country');
-
-const oligo: OligoAnalysis = {
-  oligoId: 'o1',
-  name: 'Alpha S-gene window',
-  role: 'forward',
-  sequence: SEQUENCE,
-  site,
-  window: windowSpec,
-  metrics,
-  profile,
-  insertions: [],
-  trend,
-  lineage: buildAttribution([{ count: 67520, pangoLineage: 'B.1.1.7' }], 'pangoLineage'),
-  country,
-  severity: scoreSeverity({ role: 'forward', metrics, profile }),
-  diagnostics: computeDiagnostics({ metrics, trend, country }),
-};
-
 const result: AnalysisResult = {
-  scope: {
-    pathogenId: 'sars-cov-2', dateFrom: '2021-02-01', dateTo: '2021-03-01',
-    countries: ['United Kingdom'], lineages: [],
-  },
-  pathogenId: 'sars-cov-2',
+  ...sampleResult,
   generatedAt: '2021-03-02T09:15:00.000Z',
-  dataVersion: '1785342597',
-  nScope: 71142,
-  oligos: [oligo],
-  queryCount: 7,
 };
 
 const SUMMARY_BUTTON = 'Download CSV — one row per oligo';

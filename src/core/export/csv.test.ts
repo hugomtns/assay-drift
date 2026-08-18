@@ -82,7 +82,7 @@ function analysis(input: {
     lineage,
     country,
     severity: scoreSeverity({ role: input.role, metrics, profile }),
-    diagnostics: computeDiagnostics({ metrics, trend, country }),
+    diagnostics: computeDiagnostics({ oligoName: input.name, metrics, trend, country }),
   };
 }
 
