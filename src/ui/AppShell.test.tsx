@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
+import { REGULATORY_STATEMENT } from '../state/store';
 import { AppShell } from './AppShell';
 
 /**
@@ -28,5 +29,20 @@ describe('AppShell methods link', () => {
     expect(link.getAttribute('href')).toMatch(/^https:\/\//);
     expect(link).toHaveAttribute('target', '_blank');
     expect(link.getAttribute('rel')).toContain('noopener');
+  });
+});
+
+describe('AppShell identity and regulatory treatment', () => {
+  it('keeps the compact research-use notice linked to the complete footer statement', () => {
+    render(
+      <AppShell step="input">
+        <p>content</p>
+      </AppShell>,
+    );
+
+    const notice = screen.getByRole('link', { name: /research use only/i });
+    expect(notice).toHaveAttribute('href', '#regulatory-statement');
+    expect(screen.getAllByText(REGULATORY_STATEMENT)).toHaveLength(1);
+    expect(screen.getByText(/check recent genomic drift at assay binding sites/i)).toBeInTheDocument();
   });
 });

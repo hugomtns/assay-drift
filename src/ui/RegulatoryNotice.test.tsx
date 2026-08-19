@@ -1,12 +1,12 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { RegulatoryNotice } from './RegulatoryNotice';
-import { REGULATORY_STATEMENT } from '../state/store';
 
 describe('RegulatoryNotice', () => {
-  it('renders the exact statement', () => {
+  it('renders a compact persistent link to the complete statement', () => {
     render(<RegulatoryNotice />);
-    expect(screen.getByText(REGULATORY_STATEMENT)).toBeInTheDocument();
+    const notice = screen.getByRole('link', { name: /research use only/i });
+    expect(notice).toHaveAttribute('href', '#regulatory-statement');
   });
   it('is exposed to assistive technology as a note', () => {
     render(<RegulatoryNotice />);

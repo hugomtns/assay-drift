@@ -15,6 +15,10 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
 
+export const CompactIdentity: Story = {
+  args: { step: 'scope' },
+};
+
 export const WithPathogenSelector: Story = {
   args: {
     pathogenSelector: (

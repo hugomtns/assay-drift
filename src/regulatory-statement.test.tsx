@@ -12,8 +12,7 @@ import { sampleResult } from './core/analysis/test-fixtures';
 describe('the regulatory statement appears in all five required places', () => {
   it('header and footer', () => {
     render(<App />);
-    // AppShell renders it once in the header and once in the footer.
-    expect(screen.getAllByText(REGULATORY_STATEMENT)).toHaveLength(2);
+    expect(screen.getAllByText(REGULATORY_STATEMENT)).toHaveLength(1);
   });
   it('summary CSV', () => {
     expect(toSummaryCsv(sampleResult)).toContain(REGULATORY_STATEMENT);

@@ -234,20 +234,38 @@ function CopyLinkButton() {
 
 interface PathogenSelectorProps {
   value: PathogenId;
+  hasAnalysisInputs: boolean;
   onChange: (id: PathogenId) => void;
 }
 
-function PathogenSelector({ value, onChange }: PathogenSelectorProps) {
+function PathogenSelector({ value, hasAnalysisInputs, onChange }: PathogenSelectorProps) {
+  const [requestedId, setRequestedId] = useState<PathogenId | null>(null);
+  const requestedLabel = requestedId === null ? null : PATHOGENS[requestedId].label;
+
+  const requestChange = (id: PathogenId): void => {
+    if (id === value) return;
+    if (hasAnalysisInputs) {
+      setRequestedId(id);
+      return;
+    }
+    onChange(id);
+  };
+
+  const confirmChange = (): void => {
+    if (requestedId === null) return;
+    onChange(requestedId);
+    setRequestedId(null);
+  };
+
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex max-w-sm flex-col gap-2">
       <label htmlFor="pathogen-select" className="text-sm font-medium text-slate-900">
         Pathogen
       </label>
       <select
         id="pathogen-select"
         value={value}
-        aria-describedby="pathogen-select-hint"
-        onChange={(e) => onChange(e.target.value as PathogenId)}
+        onChange={(e) => requestChange(e.target.value as PathogenId)}
         className="w-64 rounded border border-slate-300 px-2 py-1"
       >
         {Object.values(PATHOGENS).map((cfg) => (
@@ -256,10 +274,25 @@ function PathogenSelector({ value, onChange }: PathogenSelectorProps) {
           </option>
         ))}
       </select>
-      <p id="pathogen-select-hint" className="text-xs text-slate-600">
-        Each pathogen has its own reference genome, so changing it clears the oligos and any
-        analysis already run.
-      </p>
+      {requestedId !== null && (
+        <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
+          <p>{`Switch to ${requestedLabel}? Changing it clears the oligos and any analysis already run.`}</p>
+          <button
+            type="button"
+            onClick={confirmChange}
+            className="rounded bg-slate-900 px-3 py-1 text-sm text-white"
+          >
+            Change pathogen
+          </button>
+          <button
+            type="button"
+            onClick={() => { setRequestedId(null); }}
+            className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-900"
+          >
+            Keep current
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -293,6 +326,7 @@ export default function App() {
   const error = useAppStore((s) => s.error);
   const result = useAppStore((s) => s.result);
   const pathogenId = useAppStore((s) => s.pathogenId);
+  const oligos = useAppStore((s) => s.oligos);
   const setPathogen = useAppStore((s) => s.setPathogen);
   const goTo = useAppStore((s) => s.goTo);
 
@@ -508,7 +542,16 @@ export default function App() {
   }
 
   return (
-    <AppShell step={step} pathogenSelector={<PathogenSelector value={pathogenId} onChange={setPathogen} />}>
+    <AppShell
+      step={step}
+      pathogenSelector={
+        <PathogenSelector
+          value={pathogenId}
+          hasAnalysisInputs={oligos.length > 0 || result !== null}
+          onChange={setPathogen}
+        />
+      }
+    >
       {/*
         A sibling of `content`, never inside it. `content` is replaced wholesale
         when `status` or `step` changes, and a live region that is unmounted and
