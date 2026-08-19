@@ -1,4 +1,5 @@
-import { PATHOGENS, type PathogenId } from '../../core/registry';
+import { useState } from 'react';
+import { getPathogen } from '../../core/registry';
 import libraryRaw from '../../data/assays/library.json';
 import { parseLibrary, type LibraryAssay } from '../../data/assays/schema';
 import { useAppStore } from '../../state/store';
@@ -13,8 +14,6 @@ import { useAppStore } from '../../state/store';
  * round for the one file whose contents every published number depends on.
  */
 const LIBRARY = parseLibrary(libraryRaw);
-
-const PATHOGEN_ORDER = Object.keys(PATHOGENS) as PathogenId[];
 
 /**
  * A link label short enough to read and to hear.
@@ -59,15 +58,19 @@ interface AssayPickerProps {
 }
 
 export function AssayPicker({ onRunExample }: AssayPickerProps) {
-  const setPathogen = useAppStore((s) => s.setPathogen);
+  const pathogenId = useAppStore((s) => s.pathogenId);
   const setOligos = useAppStore((s) => s.setOligos);
   const goTo = useAppStore((s) => s.goTo);
+  const [search, setSearch] = useState({ pathogenId, query: '' });
+  const pathogen = getPathogen(pathogenId);
+  const assays = LIBRARY.assays.filter((assay) => assay.pathogenId === pathogenId);
+  const searchQuery = search.pathogenId === pathogenId ? search.query : '';
+  const filteredAssays = assays.filter((assay) =>
+    `${assay.name} ${assay.target} ${assay.citation.source}`.toLowerCase().includes(searchQuery.trim().toLowerCase()),
+  );
 
   const select = (assay: LibraryAssay) => {
-    // Order matters: `setPathogen` resets the whole store (a different pathogen
-    // means a different reference genome), so it has to run before the oligos
-    // are written, not after.
-    setPathogen(assay.pathogenId);
+    if (assay.pathogenId !== pathogenId) return;
     setOligos(
       assay.oligos.map((oligo, index) => ({
         id: `oligo-${index}`,
@@ -90,7 +93,7 @@ export function AssayPicker({ onRunExample }: AssayPickerProps) {
         </p>
       </div>
 
-      {onRunExample !== undefined && (
+      {onRunExample !== undefined && pathogenId === 'sars-cov-2' && (
         <div className="flex flex-wrap items-center justify-between gap-3 border-y border-slate-200 py-3">
           <div>
             <p className="text-sm font-medium text-slate-900">Recommended example</p>
@@ -110,48 +113,55 @@ export function AssayPicker({ onRunExample }: AssayPickerProps) {
         <summary className="cursor-pointer text-sm font-medium text-slate-900 underline underline-offset-4">
           Browse published assays
         </summary>
-        <div className="mt-4 flex flex-col gap-4">
-          {PATHOGEN_ORDER.map((pathogenId) => {
-            const assays = LIBRARY.assays.filter((assay) => assay.pathogenId === pathogenId);
-            if (assays.length === 0) return null;
-            const cfg = PATHOGENS[pathogenId];
-            const headingId = `assay-picker-${pathogenId}`;
-
-            return (
-              <div key={pathogenId} className="flex flex-col gap-2">
-                <h3 id={headingId} className="text-sm font-semibold text-slate-900">
-                  {cfg.label}
-                </h3>
-                <ul aria-labelledby={headingId} className="divide-y divide-slate-200 border-y border-slate-200">
-                  {assays.map((assay) => (
-                    <li key={assay.id} className="flex flex-col items-start gap-1 py-3">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          select(assay);
-                        }}
-                        className="text-left font-medium text-slate-900 underline"
-                      >
-                        {assay.name}
-                      </button>
-                      <p className="text-sm text-slate-700">
-                        {assay.target} &middot; {assay.oligos.length} oligos
-                      </p>
-                      <a
-                        href={assay.citation.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        title={assay.citation.title}
-                        className="text-sm text-slate-700 underline"
-                      >
-                        {`Source: ${shortSource(assay.citation.source)}`}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
+        <div className="mt-4 flex flex-col gap-3">
+          <h3 id="assay-picker-list-heading" className="text-sm font-semibold text-slate-900">
+            {pathogen.label}
+          </h3>
+          {assays.length > 5 && (
+            <div className="flex flex-col gap-1">
+              <label htmlFor="assay-library-search" className="text-sm font-medium text-slate-900">
+                Search assays
+              </label>
+              <input
+                id="assay-library-search"
+                type="search"
+                value={searchQuery}
+                onChange={(event) => { setSearch({ pathogenId, query: event.target.value }); }}
+                className="max-w-sm rounded border border-slate-300 px-2 py-1 text-sm"
+              />
+            </div>
+          )}
+          {filteredAssays.length === 0 ? (
+            <p className="text-sm text-slate-600">No published assays match this search.</p>
+          ) : (
+            <ul aria-labelledby="assay-picker-list-heading" className="divide-y divide-slate-200 border-y border-slate-200">
+              {filteredAssays.map((assay) => (
+                <li key={assay.id} className="flex flex-col items-start gap-1 py-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      select(assay);
+                    }}
+                    className="text-left font-medium text-slate-900 underline"
+                  >
+                    {assay.name}
+                  </button>
+                  <p className="text-sm text-slate-700">
+                    {assay.target} &middot; {assay.oligos.length} oligos
+                  </p>
+                  <a
+                    href={assay.citation.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={assay.citation.title}
+                    className="text-xs text-slate-600 underline"
+                  >
+                    {`Source: ${shortSource(assay.citation.source)}`}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </details>
     </section>

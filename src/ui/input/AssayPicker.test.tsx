@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { AssayPicker } from './AssayPicker';
@@ -46,12 +46,30 @@ describe('AssayPicker', () => {
     });
   });
 
-  it('switches the pathogen with the assay, because the reference genome changes with it', async () => {
+  it('updates the visible library when the selected pathogen changes', () => {
     render(<AssayPicker />);
 
-    await userEvent.click(
-      screen.getByRole('button', { name: 'WHO A(H5Nx) HA (H5-1201/H5-1387)' }),
-    );
+    expect(screen.getByText('SARS-CoV-2')).toBeInTheDocument();
+    expect(screen.queryByText('Influenza A/H5N1')).not.toBeInTheDocument();
+
+    act(() => { useAppStore.getState().setPathogen('h5n1'); });
+
+    expect(screen.getByText('Influenza A/H5N1')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'CDC 2019-nCoV_N1' })).not.toBeInTheDocument();
+  });
+
+  it('does not offer the SARS-CoV-2 example for a different reference', () => {
+    useAppStore.getState().setPathogen('h5n1');
+    render(<AssayPicker onRunExample={() => undefined} />);
+
+    expect(screen.queryByText(/recommended example/i)).not.toBeInTheDocument();
+  });
+
+  it('only selects an assay that belongs to the active reference', async () => {
+    useAppStore.getState().setPathogen('h5n1');
+    render(<AssayPicker />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'WHO A(H5Nx) HA (H5-1201/H5-1387)' }));
 
     expect(useAppStore.getState().pathogenId).toBe('h5n1');
     expect(useAppStore.getState().oligos.map((o) => o.role)).toEqual([
@@ -61,16 +79,13 @@ describe('AssayPicker', () => {
     ]);
   });
 
-  it('groups the assays under their pathogen', () => {
+  it('renders one scoped assay list', () => {
     render(<AssayPicker />);
 
     const sarsList = screen.getByRole('list', { name: 'SARS-CoV-2' });
     expect(within(sarsList).getByRole('button', { name: 'CDC 2019-nCoV_N1' })).toBeInTheDocument();
-    expect(
-      within(screen.getByRole('list', { name: 'Influenza A/H3N2' })).getByRole('button', {
-        name: 'WHO A(H3) HA (H3-266/H3-373)',
-      }),
-    ).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Influenza A/H3N2' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/search assays/i)).not.toBeInTheDocument();
   });
 
   it('gives every assay a citation link that cannot leak the referrer', () => {
@@ -98,6 +113,7 @@ describe('AssayPicker', () => {
    * as the name.
    */
   it('keeps the citation link short without losing the full title', () => {
+    useAppStore.getState().setPathogen('h3n2');
     render(<AssayPicker />);
 
     for (const link of screen.getAllByRole('link')) {

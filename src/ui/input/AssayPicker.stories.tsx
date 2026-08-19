@@ -26,3 +26,12 @@ export const NarrowViewport: Story = {
   args: { onRunExample: () => undefined },
   parameters: { viewport: { defaultViewport: 'narrow' } },
 };
+
+export const InfluenzaLibrary: Story = {
+  decorators: [
+    (Story) => {
+      useAppStore.getState().setPathogen('h3n2');
+      return <Story />;
+    },
+  ],
+};
