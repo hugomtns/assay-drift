@@ -1,7 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { SeverityBadge } from './SeverityBadge';
-import { SEVERITY_DISCLAIMER } from '../../core/analysis/constants';
 import type { Severity } from '../../core/analysis/severity';
 
 const severity = (over: Partial<Severity>): Severity =>
@@ -14,20 +13,14 @@ describe('SeverityBadge', () => {
     ['red', /act on/i],
     ['unknown', /not enough data/i],
   ] as const)('labels %s in words, not only in colour', (level, label) => {
-    render(<SeverityBadge severity={severity({ level })} role="forward" />);
+    render(<SeverityBadge severity={severity({ level })} />);
     expect(screen.getByText(label)).toBeInTheDocument();
   });
 
-  it('always states that this is a heuristic', () => {
-    render(<SeverityBadge severity={severity({ level: 'red' })} role="forward" />);
-    expect(screen.getByText(SEVERITY_DISCLAIMER)).toBeInTheDocument();
-  });
-
-  it('lists every reason the heuristic gave', () => {
+  it('keeps the verdict and its reasons together', () => {
     render(
       <SeverityBadge
         severity={severity({ level: 'red', reasons: ['Reason one.', 'Reason two.'] })}
-        role="forward"
       />,
     );
     expect(screen.getByText('Reason one.')).toBeInTheDocument();
@@ -35,7 +28,7 @@ describe('SeverityBadge', () => {
   });
 
   it('never claims to predict assay performance', () => {
-    render(<SeverityBadge severity={severity({ level: 'red' })} role="forward" />);
+    render(<SeverityBadge severity={severity({ level: 'red' })} />);
     expect(document.body.textContent ?? '').not.toMatch(/will fail|predicts|guarantee/i);
   });
 });

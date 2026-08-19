@@ -124,7 +124,7 @@ const CASES: Readonly<Array<[string, ReactElement]>> = [
       oligoName={sampleAnalysis.name}
     />,
   ],
-  ['SeverityBadge', <SeverityBadge severity={sampleAnalysis.severity} role="forward" />],
+  ['SeverityBadge', <SeverityBadge severity={sampleAnalysis.severity} />],
   ['CaveatPanel', <CaveatPanel result={bothOligos} />],
   ['ResultsPanel', <ResultsPanel result={bothOligos} />],
 ];

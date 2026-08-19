@@ -35,4 +35,19 @@ describe('InsertionNote', () => {
     render(<InsertionNote insertions={[insertion()]} denominator={70387} oligoName="N1-F" />);
     expect(screen.getByRole('listitem')).toHaveTextContent('70,387');
   });
+
+  it('shows only the highest-count insertions until the remainder is expanded', () => {
+    render(<InsertionNote insertions={[
+      insertion({ refPos: 1, count: 4 }),
+      insertion({ refPos: 2, count: 9 }),
+      insertion({ refPos: 3, count: 2 }),
+      insertion({ refPos: 4, count: 8 }),
+    ]} denominator={70387} oligoName="N1-F" />);
+
+    expect(screen.getByText(/4 insertions reported/i)).toBeInTheDocument();
+    expect(screen.getByText(/Show 1 other insertion/i)).toBeInTheDocument();
+    const primaryList = screen.getAllByRole('list')[0]!;
+    expect(primaryList).toHaveTextContent('9');
+    expect(primaryList).not.toHaveTextContent('After position 3');
+  });
 });

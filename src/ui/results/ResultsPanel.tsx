@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SEVERITY_DISCLAIMER, UNIT_OF_ANALYSIS } from '../../core/analysis/constants';
 import type { PositionStat } from '../../core/analysis/profile';
 import type { AnalysisResult, OligoAnalysis } from '../../core/analysis/run';
 import type { LapisTransport } from '../../core/lapis/transport';
@@ -113,7 +114,7 @@ function OligoResult({ analysis, cfg, filters, transport, openByDefault }: Oligo
             onCoverage={setExactProfile}
           />
         )}
-        <SeverityBadge severity={analysis.severity} role={analysis.role} />
+        <SeverityBadge severity={analysis.severity} />
       </div>
     </details>
   );
@@ -161,17 +162,27 @@ export function ResultsPanel({ result, transport }: ResultsPanelProps) {
         </div>
         {result.oligos.map((oligo) => (
           <div key={oligo.oligoId} role="row" className="grid gap-x-3 gap-y-1 border-t border-slate-200 py-3 sm:grid-cols-[minmax(8rem,1fr)_minmax(8rem,1fr)_minmax(13rem,1.4fr)_minmax(16rem,1.8fr)_minmax(8rem,1fr)] sm:items-center">
-            <HeadlineCard analysis={oligo} summary />
+            <HeadlineCard analysis={oligo} />
             <div role="cell">
-              <SeverityBadge severity={oligo.severity} role={oligo.role} compact />
+              <SeverityBadge severity={oligo.severity} compact />
             </div>
           </div>
         ))}
       </div>
 
+      <p className="text-xs text-slate-600">{UNIT_OF_ANALYSIS}</p>
+
       <p className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
         Sampled sequences are not infections. Sequences with ambiguous bases at this site are excluded from rates. An in-silico mismatch is not assay failure.
       </p>
+
+      <details className="text-sm text-slate-700">
+        <summary className="cursor-pointer font-medium text-slate-900">How severity is assigned</summary>
+        <div className="mt-2 flex flex-col gap-2">
+          <p>{SEVERITY_DISCLAIMER}</p>
+          <p>Primer terminal three bases are weighted more heavily. Probe positions are weighted uniformly.</p>
+        </div>
+      </details>
 
       <CaveatPanel result={result} />
 

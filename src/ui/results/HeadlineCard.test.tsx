@@ -2,7 +2,6 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { HeadlineCard } from './HeadlineCard';
 import { computeWindowMetrics } from '../../core/analysis/metrics';
-import { UNIT_OF_ANALYSIS } from '../../core/analysis/constants';
 import type { OligoAnalysis } from '../../core/analysis/run';
 
 const analysis = (nScope: number, nFullCoverage: number, nMismatch: number) =>
@@ -25,20 +24,14 @@ describe('HeadlineCard', () => {
     expect(screen.getByText(/4\.3\s*%/)).toBeInTheDocument();
   });
 
-  it('states the unit of analysis', () => {
-    render(<HeadlineCard analysis={analysis(1000, 1000, 10)} />);
-    expect(screen.getByText(UNIT_OF_ANALYSIS)).toBeInTheDocument();
-  });
-
   it('shows no percentage when nothing is assessable', () => {
     render(<HeadlineCard analysis={analysis(40, 0, 0)} />);
-    expect(screen.getByLabelText(/headline mismatch rate/i))
-      .toHaveTextContent(/no assessable sequences/i);
+    expect(screen.getByText(/no assessable sequences/i)).toBeInTheDocument();
   });
 
   it('suppresses the percentage below the minimum denominator', () => {
     render(<HeadlineCard analysis={analysis(60, 30, 15)} />);
-    const headline = screen.getByLabelText(/headline mismatch rate/i);
+    const headline = screen.getByText(/insufficient data/i);
     expect(headline).toHaveTextContent(/insufficient data/i);
     expect(headline).toHaveTextContent(/n = 30/);
     expect(headline).not.toHaveTextContent('%');

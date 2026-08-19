@@ -1,5 +1,3 @@
-import { useId } from 'react';
-import { UNIT_OF_ANALYSIS } from '../../core/analysis/constants';
 import type { OligoAnalysis } from '../../core/analysis/run';
 import type { OligoRole } from '../../core/oligo-input';
 import { formatCount, formatPercent, formatRate } from '../format';
@@ -12,7 +10,6 @@ const ROLE_LABELS: Readonly<Record<OligoRole, string>> = {
 
 interface HeadlineCardProps {
   analysis: OligoAnalysis;
-  summary?: boolean;
 }
 
 /**
@@ -47,9 +44,8 @@ interface HeadlineCardProps {
  * mismatch rate over the sequences that happened to be well covered is only
  * meaningful next to it.
  */
-export function HeadlineCard({ analysis, summary = false }: HeadlineCardProps) {
+export function HeadlineCard({ analysis }: HeadlineCardProps) {
   const { metrics } = analysis;
-  const headingId = useId();
 
   const noDenominator = metrics.mismatchFraction === null;
   const rate = noDenominator
@@ -62,43 +58,14 @@ export function HeadlineCard({ analysis, summary = false }: HeadlineCardProps) {
           denominator: metrics.nFullCoverage,
         });
 
-  if (summary) {
-    return (
-      <>
-        <span role="cell" className="font-semibold text-slate-900">{analysis.name}</span>
-        <span role="cell" className="text-slate-600">{ROLE_LABELS[analysis.role]}</span>
-        <span role="cell" className="tabular-nums">{rate}</span>
-        <span role="cell" className="tabular-nums">
-          {`Coverage gap: ${formatCount(metrics.coverageGap)} of ${formatCount(metrics.nScope)} (${formatPercent(metrics.coverageGapFraction)})`}
-        </span>
-      </>
-    );
-  }
-
   return (
-    <article
-      aria-labelledby={headingId}
-      className="flex flex-col gap-2 rounded border border-slate-200 p-4"
-    >
-      <div className="flex flex-wrap items-baseline gap-x-3">
-        <h3 id={headingId} className="text-lg font-semibold text-slate-900">
-          {analysis.name}
-        </h3>
-        <span className="text-sm text-slate-600">{ROLE_LABELS[analysis.role]}</span>
-      </div>
-
-      <div aria-label="Headline mismatch rate" className="flex flex-col gap-1">
-        <p className="text-3xl font-semibold text-slate-900">{rate}</p>
-        <p className="text-sm text-slate-700">
-          Sequences carrying at least one mismatch, out of those assessable at this site.
-        </p>
-      </div>
-
-      <p className="text-sm text-slate-700">
-        {`Coverage gap: ${formatCount(metrics.coverageGap)} of ${formatCount(metrics.nScope)} sequences in scope (${formatPercent(metrics.coverageGapFraction)}) have an ambiguous base somewhere in this site and are excluded.`}
-      </p>
-
-      <p className="text-xs text-slate-600">{UNIT_OF_ANALYSIS}</p>
-    </article>
+    <>
+      <span role="cell" className="font-semibold text-slate-900">{analysis.name}</span>
+      <span role="cell" className="text-slate-600">{ROLE_LABELS[analysis.role]}</span>
+      <span role="cell" className="tabular-nums">{rate}</span>
+      <span role="cell" className="tabular-nums">
+        {`Coverage gap: ${formatCount(metrics.coverageGap)} of ${formatCount(metrics.nScope)} (${formatPercent(metrics.coverageGapFraction)})`}
+      </span>
+    </>
   );
 }

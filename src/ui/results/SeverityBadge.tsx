@@ -1,5 +1,3 @@
-import { SEVERITY_DISCLAIMER } from '../../core/analysis/constants';
-import type { OligoRole } from '../../core/oligo-input';
 import type { Severity, SeverityLevel } from '../../core/analysis/severity';
 // The four words live one module over because the live region that announces
 // a finished run says the same word, and two copies would be two things to
@@ -62,31 +60,20 @@ function LevelIcon({ level }: { level: SeverityLevel }) {
 
 interface SeverityBadgeProps {
   severity: Severity;
-  role: OligoRole;
   compact?: boolean;
 }
 
 /**
  * The heuristic's verdict, with everything needed to discount it.
  *
- * The disclaimer is rendered unconditionally and never behind a disclosure:
- * the badge is the most quotable thing on the page, and a caveat that has to
- * be opened is a caveat that will not be read alongside the word it qualifies.
- *
- * The reasons are shown in full rather than summarised. They are the only
- * account of *why* a level was reached, and a reader who disagrees with the
- * weighting needs to see which positions drove it.
+ * The badge carries only the verdict and data-specific reasons. The stable
+ * heuristic explanation is rendered once beside the assay summary.
  *
  * No wording here forecasts what an assay will do. `scoreSeverity` counts
  * mismatches and weights them by position; it models neither hybridisation nor
  * amplification, so the badge says what to look at, never what will happen.
  */
-export function SeverityBadge({ severity, role, compact = false }: SeverityBadgeProps) {
-  const weighting =
-    role === 'probe'
-      ? 'Positions are weighted uniformly for a probe.'
-      : 'Positions within the terminal three bases of the 3′ end are weighted more heavily.';
-
+export function SeverityBadge({ severity, compact = false }: SeverityBadgeProps) {
   return (
     <div className="flex flex-col gap-2">
       <p
@@ -104,8 +91,6 @@ export function SeverityBadge({ severity, role, compact = false }: SeverityBadge
         </ul>
       )}
 
-      {!compact && <p className="text-xs text-slate-600">{weighting}</p>}
-      {!compact && <p className="text-xs text-slate-600">{SEVERITY_DISCLAIMER}</p>}
     </div>
   );
 }

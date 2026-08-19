@@ -364,14 +364,14 @@ const LEVELS: readonly SeverityLevel[] = ['green', 'amber', 'red', 'unknown'];
 
 describe('4. severity is never communicated by colour alone', () => {
   it.each(LEVELS)('%s renders its word', (level) => {
-    render(<SeverityBadge severity={{ level, score: 0, reasons: [] }} role="forward" />);
+    render(<SeverityBadge severity={{ level, score: 0, reasons: [] }} />);
     expect(screen.getByText(SEVERITY_LABELS[level])).toBeInTheDocument();
   });
 
   it('gives each level a different shape', () => {
     const shapes = LEVELS.map((level) => {
       const { container, unmount } = render(
-        <SeverityBadge severity={{ level, score: 0, reasons: [] }} role="forward" />,
+        <SeverityBadge severity={{ level, score: 0, reasons: [] }} />,
       );
       const svg = container.querySelector('svg');
       if (svg === null) throw new Error(`no icon rendered for ${level}`);

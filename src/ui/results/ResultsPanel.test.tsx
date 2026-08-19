@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect } from 'vitest';
 import { ResultsPanel } from './ResultsPanel';
 import { FIXED_CAVEATS } from '../CaveatPanel';
-import { SEVERITY_DISCLAIMER } from '../../core/analysis/constants';
+import { SEVERITY_DISCLAIMER, UNIT_OF_ANALYSIS } from '../../core/analysis/constants';
 import { computeWindowMetrics } from '../../core/analysis/metrics';
 import type { PositionStat } from '../../core/analysis/profile';
 import type { AnalysisResult, OligoAnalysis } from '../../core/analysis/run';
@@ -121,7 +121,8 @@ describe('ResultsPanel', () => {
 
   it('renders one severity badge per oligo', () => {
     render(<ResultsPanel result={result()} />);
-    expect(screen.getAllByText(SEVERITY_DISCLAIMER)).toHaveLength(3);
+    expect(screen.getAllByText(SEVERITY_DISCLAIMER)).toHaveLength(1);
+    expect(screen.getByText('How severity is assigned')).toBeInTheDocument();
     expect(screen.getByText('N1-F reason.')).toBeInTheDocument();
     expect(screen.getByText('N1-R reason.')).toBeInTheDocument();
     expect(screen.getByText('N1-P reason.')).toBeInTheDocument();
@@ -139,6 +140,7 @@ describe('ResultsPanel', () => {
     expect(within(summary).getAllByText('95.9% (67,520 of 70,387)')).toHaveLength(3);
     expect(within(summary).getAllByText('Coverage gap: 755 of 71,142 (1.1%)')).toHaveLength(3);
     expect(within(summary).getAllByRole('cell')).toHaveLength(15);
+    expect(screen.getAllByText(UNIT_OF_ANALYSIS)).toHaveLength(1);
   });
 
   it('shows the three interpretation facts before the limitations disclosure', () => {

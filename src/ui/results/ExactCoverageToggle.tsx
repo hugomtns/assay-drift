@@ -155,8 +155,8 @@ export function ExactCoverageToggle({
           }
         >
           {state.kind === 'loading'
-            ? `Loading exact per-base coverage (${formatCount(positions)} extra queries)…`
-            : `Load exact per-base coverage (${formatCount(positions)} extra queries)`}
+            ? `Measuring exact coverage (${formatCount(positions)} extra queries)…`
+            : `Measure exact coverage (${formatCount(positions)} extra queries)`}
         </button>
       )}
       {/*
@@ -170,8 +170,7 @@ export function ExactCoverageToggle({
       </p>
       {state.kind === 'idle' && !overCap && (
         <p className="text-xs text-slate-600">
-          Positions where nothing was mutated have no reported coverage, so their bars borrow the
-          window denominator. Measuring them takes one extra query each.
+          Hatched positions use the window denominator because their per-position coverage was not reported.
         </p>
       )}
     </div>

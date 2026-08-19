@@ -14,6 +14,8 @@ interface InsertionNoteProps {
   oligoName: string;
 }
 
+const VISIBLE_INSERTIONS = 3;
+
 /**
  * Insertions inside the binding site.
  *
@@ -36,20 +38,34 @@ interface InsertionNoteProps {
  */
 export function InsertionNote({ insertions, denominator, oligoName }: InsertionNoteProps) {
   if (insertions.length === 0) return null;
+  const ranked = [...insertions].sort((a, b) => b.count - a.count);
+  const visible = ranked.slice(0, VISIBLE_INSERTIONS);
+  const remaining = ranked.slice(VISIBLE_INSERTIONS);
+  const item = (insertion: WindowInsertion) => (
+    <li key={`${String(insertion.refPos)}-${insertion.insertedSymbols}`}>
+      {`After position ${formatCount(insertion.refPos)}: ${insertion.insertedSymbols} inserted in ${formatCount(insertion.count)} of ${formatCount(denominator)} assessable sequences (approximately ${formatPercent(insertion.fractionOfDenominator)}).`}
+    </li>
+  );
 
   return (
     <section aria-label={`Insertions in this binding site: ${oligoName}`} className="flex flex-col gap-2">
       <h4 className="text-base font-semibold text-slate-900">
         Insertions in this binding site
       </h4>
+      <p className="text-sm text-slate-700">
+        {`${formatCount(insertions.length)} insertion${insertions.length === 1 ? '' : 's'} reported. Highest-count entries:`}
+      </p>
 
       <ul className="list-disc pl-5 text-sm text-slate-700">
-        {insertions.map((insertion) => (
-          <li key={`${String(insertion.refPos)}-${insertion.insertedSymbols}`}>
-            {`After position ${formatCount(insertion.refPos)}: ${insertion.insertedSymbols} inserted in ${formatCount(insertion.count)} of ${formatCount(denominator)} assessable sequences (approximately ${formatPercent(insertion.fractionOfDenominator)}).`}
-          </li>
-        ))}
+        {visible.map(item)}
       </ul>
+
+      {remaining.length > 0 && (
+        <details className="text-sm text-slate-700">
+          <summary className="cursor-pointer">{`Show ${formatCount(remaining.length)} other insertion${remaining.length === 1 ? '' : 's'}`}</summary>
+          <ul className="mt-2 list-disc pl-5">{remaining.map(item)}</ul>
+        </details>
+      )}
 
       <p className="text-xs text-slate-600">
         The insertions endpoint reports no coverage of its own, so these shares borrow this site&apos;s

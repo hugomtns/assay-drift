@@ -317,6 +317,12 @@ export function PositionProfile({ analysis }: PositionProfileProps) {
         </div>
       </div>
 
+      {anyInferred && (
+        <p className="text-xs text-slate-600">
+          Approximate denominators: hatched positions use the window denominator because per-position coverage was not reported.
+        </p>
+      )}
+
       {/*
         The chart's equivalent for assistive technology (Task 6.2,
         requirement 3), and the reason the columns above are `aria-hidden`.

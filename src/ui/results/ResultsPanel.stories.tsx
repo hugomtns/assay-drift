@@ -13,6 +13,19 @@ const routineResult = {
   })),
 } satisfies AnalysisResult;
 
+const longInsertionsResult = {
+  ...routineResult,
+  oligos: routineResult.oligos.map((oligo) => ({
+    ...oligo,
+    insertions: [
+      { refPos: 21765, insertedSymbols: 'A', count: 24, fractionOfDenominator: 24 / 70387 },
+      { refPos: 21766, insertedSymbols: 'T', count: 18, fractionOfDenominator: 18 / 70387 },
+      { refPos: 21767, insertedSymbols: 'G', count: 12, fractionOfDenominator: 12 / 70387 },
+      { refPos: 21768, insertedSymbols: 'C', count: 6, fractionOfDenominator: 6 / 70387 },
+    ],
+  })),
+} satisfies AnalysisResult;
+
 const meta = {
   title: 'Results/Panel',
   component: ResultsPanel,
@@ -26,6 +39,10 @@ export const Default: Story = {};
 
 export const RoutineCollapsed: Story = {
   args: { result: routineResult },
+};
+
+export const LongInsertions: Story = {
+  args: { result: longInsertionsResult },
 };
 
 export const NarrowViewport: Story = {
