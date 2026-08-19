@@ -16,7 +16,7 @@ const local = {
 };
 
 export default tseslint.config(
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'coverage', 'storybook-static']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

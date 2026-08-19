@@ -19,6 +19,10 @@ export const CompactIdentity: Story = {
   args: { step: 'scope' },
 };
 
+export const RevisitCompletedStep: Story = {
+  args: { step: 'results', onStepChange: () => undefined },
+};
+
 export const WithPathogenSelector: Story = {
   args: {
     pathogenSelector: (

@@ -76,6 +76,8 @@ const initial = (pathogenId: PathogenId = 'sars-cov-2') => ({
   error: null,
 });
 
+const invalidatedAnalysis = { result: null, status: 'idle' as Status, error: null };
+
 export const useAppStore = create<AppState>((set) => ({
   ...initial(),
 
@@ -88,17 +90,22 @@ export const useAppStore = create<AppState>((set) => ({
       ),
       resolutions: {},
       chosenSites: {},
-      result: null,
-      status: 'idle',
-      error: null,
+      ...invalidatedAnalysis,
     })),
-  setRole: (oligoId, role) => set((s) => ({ roles: { ...s.roles, [oligoId]: role } })),
+  setRole: (oligoId, role) =>
+    set((s) => ({
+      roles: { ...s.roles, [oligoId]: role },
+      resolutions: {},
+      chosenSites: {},
+      ...invalidatedAnalysis,
+    })),
   setResolution: (oligoId, resolution) =>
     set((s) => ({ resolutions: { ...s.resolutions, [oligoId]: resolution } })),
-  chooseSite: (oligoId, site) => set((s) => ({ chosenSites: { ...s.chosenSites, [oligoId]: site } })),
+  chooseSite: (oligoId, site) =>
+    set((s) => ({ chosenSites: { ...s.chosenSites, [oligoId]: site }, ...invalidatedAnalysis })),
   // Deliberately not a merge. See the interface comment.
-  commitSites: (sites) => set(() => ({ chosenSites: { ...sites } })),
-  setScope: (partial) => set((s) => ({ scope: { ...s.scope, ...partial }, result: null })),
+  commitSites: (sites) => set(() => ({ chosenSites: { ...sites }, ...invalidatedAnalysis })),
+  setScope: (partial) => set((s) => ({ scope: { ...s.scope, ...partial }, ...invalidatedAnalysis })),
   goTo: (step) => set(() => ({ step })),
   startAnalysis: () => set(() => ({ status: 'loading', error: null })),
   analysisSucceeded: (result) => set(() => ({ status: 'ready', result, step: 'results' })),

@@ -26,6 +26,7 @@ const STEPS: Readonly<Array<{ id: Step; label: string }>> = [
 
 interface AppShellProps {
   step: Step;
+  onStepChange?: (step: Step) => void;
   pathogenSelector?: ReactNode;
   children: ReactNode;
 }
@@ -35,7 +36,7 @@ interface AppShellProps {
  * numbered step indicator, page content, and the complete regulatory statement
  * in the footer.
  */
-export function AppShell({ step, pathogenSelector, children }: AppShellProps) {
+export function AppShell({ step, onStepChange, pathogenSelector, children }: AppShellProps) {
   const currentIndex = STEPS.findIndex((s) => s.id === step);
 
   return (
@@ -51,12 +52,29 @@ export function AppShell({ step, pathogenSelector, children }: AppShellProps) {
         {pathogenSelector !== undefined && <div>{pathogenSelector}</div>}
         <ol className="flex flex-wrap gap-4 text-sm" aria-label="Steps">
           {STEPS.map((s, i) => (
-            <li
-              key={s.id}
-              aria-current={i === currentIndex ? 'step' : undefined}
-              className={i === currentIndex ? 'font-semibold text-slate-900' : 'text-slate-500'}
-            >
-              {i + 1}. {s.label}
+            <li key={s.id}>
+              {i < currentIndex && onStepChange !== undefined ? (
+                <button
+                  type="button"
+                  onClick={() => { onStepChange(s.id); }}
+                  className="text-slate-700 underline underline-offset-4"
+                  aria-label={`Return to ${s.label}`}
+                >
+                  {i + 1}. {s.label}
+                </button>
+              ) : i === currentIndex ? (
+                <span aria-current="step" className="font-semibold text-slate-900">
+                  Current: {s.label}
+                </span>
+              ) : (
+                <span
+                  aria-disabled="true"
+                  aria-label={`${s.label} unavailable until ${STEPS[i - 1]?.label ?? 'the previous step'} is complete`}
+                  className="text-slate-500"
+                >
+                  {i + 1}. {s.label} unavailable
+                </span>
+              )}
             </li>
           ))}
         </ol>

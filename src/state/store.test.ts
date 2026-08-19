@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { sampleResult } from '../core/analysis/test-fixtures';
 import { useAppStore } from './store';
 
 const reset = () => { useAppStore.getState().reset(); };
@@ -78,5 +79,23 @@ describe('app store', () => {
     expect(s().error).toMatch(/bad query/);
     s().startAnalysis();
     expect(s().error).toBeNull();
+  });
+
+  it('invalidates a result when oligos, binding sites, or scope change', () => {
+    const s = () => useAppStore.getState();
+    const site = { segment: 'main' as const, strand: 'plus' as const, start: 1, end: 16, mismatches: 0, mismatchOligoIndexes: [] };
+
+    s().analysisSucceeded(sampleResult);
+    s().setOligos([{ id: 'o1', name: 'x', role: 'forward', sequence: 'ACGTACGTACGTACGT' }]);
+    expect(s().result).toBeNull();
+    expect(s().chosenSites).toEqual({});
+
+    s().analysisSucceeded(sampleResult);
+    s().commitSites({ o1: site });
+    expect(s().result).toBeNull();
+
+    s().analysisSucceeded(sampleResult);
+    s().setScope({ countries: ['Germany'] });
+    expect(s().result).toBeNull();
   });
 });

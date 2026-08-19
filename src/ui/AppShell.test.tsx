@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { describe, it, expect, vi } from 'vitest';
 import { REGULATORY_STATEMENT } from '../state/store';
 import { AppShell } from './AppShell';
 
@@ -44,5 +45,36 @@ describe('AppShell identity and regulatory treatment', () => {
     expect(notice).toHaveAttribute('href', '#regulatory-statement');
     expect(screen.getAllByText(REGULATORY_STATEMENT)).toHaveLength(1);
     expect(screen.getByText(/check recent genomic drift at assay binding sites/i)).toBeInTheDocument();
+  });
+});
+
+describe('AppShell step navigation', () => {
+  it('lets keyboard users return to every completed step and keeps future steps unavailable', async () => {
+    const onStepChange = vi.fn();
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <AppShell step="results" onStepChange={onStepChange}>
+        <p>content</p>
+      </AppShell>,
+    );
+
+    await user.tab();
+    await user.tab();
+    expect(screen.getByRole('button', { name: /return to oligos/i })).toHaveFocus();
+    await user.keyboard('{Enter}');
+    await user.click(screen.getByRole('button', { name: /return to binding site/i }));
+    await user.click(screen.getByRole('button', { name: /return to scope/i }));
+
+    expect(onStepChange).toHaveBeenNthCalledWith(1, 'input');
+    expect(onStepChange).toHaveBeenNthCalledWith(2, 'binding');
+    expect(onStepChange).toHaveBeenNthCalledWith(3, 'scope');
+    expect(screen.getByText(/current: results/i)).toHaveAttribute('aria-current', 'step');
+
+    rerender(
+      <AppShell step="input" onStepChange={onStepChange}>
+        <p>content</p>
+      </AppShell>,
+    );
+    expect(screen.getByText(/binding site unavailable/i)).toHaveAttribute('aria-disabled', 'true');
   });
 });

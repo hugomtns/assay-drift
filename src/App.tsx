@@ -544,6 +544,7 @@ export default function App() {
   return (
     <AppShell
       step={step}
+      onStepChange={goTo}
       pathogenSelector={
         <PathogenSelector
           value={pathogenId}
