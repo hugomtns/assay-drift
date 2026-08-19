@@ -100,12 +100,14 @@ function OligoBindingRow({
         <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
           {STATUS_LABELS[resolution.status]}
         </span>
+        {located !== null && located !== undefined && (
+          <span className="font-mono text-sm text-slate-900">{describeSite(located)}</span>
+        )}
       </div>
 
       {located !== null && located !== undefined && (
         <>
-          <p className="font-mono text-sm text-slate-900">{describeSite(located)}</p>
-          <p className="text-sm text-slate-600">{describeMismatches(located)}</p>
+          {located.mismatches > 0 && <p className="text-sm text-slate-600">{describeMismatches(located)}</p>}
         </>
       )}
 
@@ -348,9 +350,10 @@ export function BindingResolution() {
       <h2 id="binding-resolution-heading" className="text-xl font-semibold">
         Step 2: Check the binding sites
       </h2>
-      <p className="text-sm text-slate-700">
-        {`Each oligo was located on the bundled ${pathogen.label} reference (snapshot of ${referenceFetchedAt(pathogenId)}). Positions are 1-based and inclusive, and are always counted along the reference itself, whichever strand the oligo binds.`}
-      </p>
+      <details className="text-sm text-slate-700">
+        <summary className="cursor-pointer font-medium text-slate-900">Reference details</summary>
+        <p className="mt-2">{`Bundled ${pathogen.label} reference, snapshot ${referenceFetchedAt(pathogenId)}. Positions are 1-based, inclusive, and counted along the reference strand.`}</p>
+      </details>
 
       {oligos.length === 0 ? (
         <p className="text-sm text-slate-700">No oligos yet. Go back to step 1 and add some.</p>
@@ -371,7 +374,7 @@ export function BindingResolution() {
         </ul>
       )}
 
-      {geometry !== null && (
+      {geometry !== null && (geometry.ampliconLength !== null || geometry.problems.length > 0) && (
         <section aria-labelledby="assay-geometry-heading" className="flex flex-col gap-1">
           <h3 id="assay-geometry-heading" className="text-base font-semibold">
             Assay geometry
@@ -394,23 +397,19 @@ export function BindingResolution() {
         </section>
       )}
 
-      <section aria-labelledby="genome-map-heading" className="flex flex-col gap-3">
+      {sitesBySegment.size > 0 && <section aria-labelledby="genome-map-heading" className="flex flex-col gap-3">
         <h3 id="genome-map-heading" className="text-base font-semibold">
           Genome map
         </h3>
-        {sitesBySegment.size === 0 ? (
-          <p className="text-sm text-slate-700">The map appears once a site has been chosen.</p>
-        ) : (
-          [...sitesBySegment.entries()].map(([segment, sites]) => (
+        {[...sitesBySegment.entries()].map(([segment, sites]) => (
             <GenomeMap
               key={segment}
               segmentLabel={pathogen.segmentLabels[segment] ?? segment}
               segmentLength={segmentLength(segment)}
               sites={sites}
             />
-          ))
-        )}
-      </section>
+          ))}
+      </section>}
 
       {/*
         Always mounted with its text swapped in, like every other message

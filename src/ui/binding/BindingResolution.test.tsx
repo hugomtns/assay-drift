@@ -170,7 +170,7 @@ describe('BindingResolution: retracted confirmations', () => {
     await userEvent.click(confirm);
     expectBlocked(screen.getByRole('button', { name: /continue/i }));
     expect(screen.queryAllByRole('img')).toHaveLength(0);
-    expect(screen.getByText(/map appears once a site has been chosen/i)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /genome map/i })).not.toBeInTheDocument();
   });
 
   it('stops counting a retracted probe in the geometry check', async () => {
