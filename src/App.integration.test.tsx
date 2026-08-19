@@ -59,12 +59,9 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getAllByText(/assessable sequences/i).length).toBeGreaterThan(0);
     });
-    // Task 6.1 moved the counts inside the percentage's own string, so the
-    // headline now reads "100.0% (1,000 of 1,000)". The assertion still pins
-    // the numerator and the denominator; it is the rendering that changed.
-    expect(screen.getByLabelText('Headline mismatch rate')).toHaveTextContent(
-      '(1,000 of 1,000)',
-    );
+    // The assay summary is the first quotable result. Its rate still carries
+    // both counts in the same visual unit.
+    expect(within(screen.getByRole('table', { name: 'Assay summary' })).getByText(/\(1,000 of 1,000\)/)).toBeInTheDocument();
   });
 
   it('shows a loading state while a query is in flight', async () => {
@@ -170,15 +167,12 @@ describe('App worked example', () => {
     });
     // The label promises "since 2020", so the scope it loads has to start there.
     expect(state.scope.dateFrom).toBe('2020-01-01');
-    // A three-oligo assay renders a headline per oligo, so the single-match
-    // query this used to be throws "Found multiple elements". Asserting the
-    // denominator on every one of them is the stronger reading of the same
-    // intent, not a relaxed one: it would catch a headline that went missing
-    // as well as one that printed the wrong n.
-    const headlines = screen.getAllByLabelText('Headline mismatch rate');
-    expect(headlines).toHaveLength(3);
-    for (const headline of headlines) {
-      expect(headline).toHaveTextContent('(4,000 of 4,000)');
+    // Every summary row keeps its rate denominator attached to the percentage.
+    const summary = within(screen.getByRole('table', { name: 'Assay summary' }));
+    const rates = summary.getAllByText(/\(4,000 of 4,000\)/);
+    expect(rates).toHaveLength(3);
+    for (const rate of rates) {
+      expect(rate).toHaveTextContent('(4,000 of 4,000)');
     }
   });
 

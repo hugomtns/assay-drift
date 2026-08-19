@@ -33,6 +33,23 @@ interface OligoResultProps {
   cfg: PathogenConfig;
   filters: Record<string, unknown>;
   transport: LapisTransport | undefined;
+  openByDefault: boolean;
+}
+
+const severityRank = { green: 0, amber: 1, red: 2, unknown: 3 } as const;
+
+function initialOpenOligoId(oligos: readonly OligoAnalysis[]): string | undefined {
+  const concerning = oligos.find(
+    (oligo) => oligo.severity.level === 'red' || oligo.severity.level === 'unknown',
+  );
+  if (concerning !== undefined) return concerning.oligoId;
+
+  return oligos.reduce<OligoAnalysis | undefined>((mostSevere, oligo) => {
+    if (mostSevere === undefined) return oligo;
+    return severityRank[oligo.severity.level] > severityRank[mostSevere.severity.level]
+      ? oligo
+      : mostSevere;
+  }, undefined)?.oligoId;
 }
 
 /**
@@ -50,46 +67,55 @@ interface OligoResultProps {
  * cleanup aborts anything still in flight. That is the reset -- there is no
  * effect here undoing state after the fact.
  */
-function OligoResult({ analysis, cfg, filters, transport }: OligoResultProps) {
+function OligoResult({ analysis, cfg, filters, transport, openByDefault }: OligoResultProps) {
   const [exactProfile, setExactProfile] = useState<PositionStat[] | null>(null);
+  const [open, setOpen] = useState(openByDefault);
   const shown: OligoAnalysis =
     exactProfile === null ? analysis : { ...analysis, profile: exactProfile };
 
   return (
-    <div className="flex flex-col gap-4 rounded border border-slate-300 p-4">
-      <HeadlineCard analysis={shown} />
-      <SeverityBadge severity={analysis.severity} role={analysis.role} />
-      {transport !== undefined && (
-        <ExactCoverageToggle
-          analysis={analysis}
-          transport={transport}
-          cfg={cfg}
-          filters={filters}
-          onCoverage={setExactProfile}
-        />
-      )}
-      <PositionProfile analysis={shown} />
-      <TrendChart trend={analysis.trend} />
+    <details
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+      className="rounded border border-slate-300 p-4"
+    >
+      <summary className="cursor-pointer font-semibold text-slate-900">
+        {`${analysis.name} detailed evidence`}
+      </summary>
+      <div className="mt-4 flex flex-col gap-4">
+        <PositionProfile analysis={shown} />
+        <TrendChart trend={analysis.trend} />
       {/*
         Every panel below is repeated once per oligo, so each is named with
         the oligo it belongs to. Without that a three-oligo result exposes
         six identically named regions and a landmark list that cannot be
         used to get anywhere.
       */}
-      <div className="flex flex-wrap gap-6">
-        <AttributionTable
-          attribution={analysis.lineage}
-          label={cfg.lineageLabel}
+        <div className="flex flex-wrap gap-6">
+          <AttributionTable
+            attribution={analysis.lineage}
+            label={cfg.lineageLabel}
+            oligoName={analysis.name}
+          />
+          <AttributionTable attribution={analysis.country} label="Country" oligoName={analysis.name} />
+        </div>
+        <InsertionNote
+          insertions={analysis.insertions}
+          denominator={analysis.metrics.nFullCoverage}
           oligoName={analysis.name}
         />
-        <AttributionTable attribution={analysis.country} label="Country" oligoName={analysis.name} />
+        {transport !== undefined && (
+          <ExactCoverageToggle
+            analysis={analysis}
+            transport={transport}
+            cfg={cfg}
+            filters={filters}
+            onCoverage={setExactProfile}
+          />
+        )}
+        <SeverityBadge severity={analysis.severity} role={analysis.role} />
       </div>
-      <InsertionNote
-        insertions={analysis.insertions}
-        denominator={analysis.metrics.nFullCoverage}
-        oligoName={analysis.name}
-      />
-    </div>
+    </details>
   );
 }
 
@@ -117,6 +143,7 @@ function OligoResult({ analysis, cfg, filters, transport }: OligoResultProps) {
 export function ResultsPanel({ result, transport }: ResultsPanelProps) {
   const cfg = getPathogen(result.pathogenId);
   const filters = scopeToFilters(result.scope, cfg);
+  const initiallyOpenOligoId = initialOpenOligoId(result.oligos);
 
   return (
     <section aria-labelledby="results-panel-heading" className="flex flex-col gap-6">
@@ -164,6 +191,7 @@ export function ResultsPanel({ result, transport }: ResultsPanelProps) {
           cfg={cfg}
           filters={filters}
           transport={transport}
+          openByDefault={oligo.oligoId === initiallyOpenOligoId}
         />
       ))}
     </section>

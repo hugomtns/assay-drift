@@ -98,11 +98,25 @@ const result = () =>
   }) as unknown as AnalysisResult;
 
 describe('ResultsPanel', () => {
-  it('renders one headline card per oligo, named after it', () => {
-    render(<ResultsPanel result={result()} />);
+  it('renders an independently operable evidence disclosure per oligo', () => {
+    const { container } = render(<ResultsPanel result={result()} />);
     for (const name of ['N1-F', 'N1-R', 'N1-P']) {
-      expect(screen.getByRole('article', { name })).toBeInTheDocument();
+      expect(screen.getByText(`${name} detailed evidence`).closest('details')).toBeInTheDocument();
     }
+    expect(screen.getByText('N1-F detailed evidence').closest('details')).toHaveAttribute('open');
+    expect(screen.getByText('N1-R detailed evidence').closest('details')).not.toHaveAttribute('open');
+    expect(container.querySelector('article')).toBeNull();
+  });
+
+  it('opens the first red or unknown result, ahead of routine results', () => {
+    const withPriority = result();
+    withPriority.oligos[1]!.severity = { level: 'unknown', score: 0, reasons: ['Too little data.'] };
+    withPriority.oligos[2]!.severity = { level: 'red', score: 1, reasons: ['High mismatch rate.'] };
+    render(<ResultsPanel result={withPriority} />);
+
+    expect(screen.getByText('N1-F detailed evidence').closest('details')).not.toHaveAttribute('open');
+    expect(screen.getByText('N1-R detailed evidence').closest('details')).toHaveAttribute('open');
+    expect(screen.getByText('N1-P detailed evidence').closest('details')).not.toHaveAttribute('open');
   });
 
   it('renders one severity badge per oligo', () => {
@@ -184,6 +198,26 @@ describe('ResultsPanel', () => {
     const titles = [...container.querySelectorAll('title')].map((t) => t.textContent ?? '');
     expect(titles.filter((t) => t.includes('per-position coverage not reported'))).toEqual([]);
   });
+
+  it('keeps one oligo’s exact-coverage state when another disclosure opens', async () => {
+    const user = userEvent.setup();
+    const first = sampleResult.oligos[0]!;
+    const second = { ...first, oligoId: 'second-oligo', name: 'Second oligo' };
+    const multiOligoResult = { ...sampleResult, oligos: [first, second] };
+    const transport: LapisTransport = {
+      async query() {
+        return { data: [{ count: 70387 }], dataVersion: 'v', requestId: 'r' } as never;
+      },
+    };
+    render(<ResultsPanel result={multiOligoResult} transport={transport} />);
+
+    await user.click(screen.getAllByRole('button', { name: /extra queries/ })[0]!);
+    await screen.findByText(/Exact per-base coverage loaded for Alpha S-gene window/i);
+
+    await user.click(screen.getByText('Second oligo detailed evidence'));
+    expect(screen.getByText('Second oligo detailed evidence').closest('details')).toHaveAttribute('open');
+    expect(screen.getByText(/Exact per-base coverage loaded for Alpha S-gene window/i)).toBeInTheDocument();
+  });
 });
 
 /**
@@ -199,11 +233,11 @@ describe('ResultsPanel — what the browser found and jsdom could not', () => {
     // Global Constraint 7 held in the markup and failed in the reading.
     const { container } = render(<ResultsPanel result={sampleResult} />);
     const caveats = container.querySelector('#caveat-panel-heading');
-    const firstCard = container.querySelector('article');
+    const firstEvidence = screen.getByText(/detailed evidence/i).closest('details');
     expect(caveats).not.toBeNull();
-    expect(firstCard).not.toBeNull();
+    expect(firstEvidence).not.toBeNull();
 
-    const order = caveats!.compareDocumentPosition(firstCard!);
+    const order = caveats!.compareDocumentPosition(firstEvidence!);
     expect(order & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
