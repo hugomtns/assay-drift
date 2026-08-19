@@ -8,6 +8,7 @@ import { loadReference, referenceFetchedAt } from '../../data/references';
 import { useAppStore } from '../../state/store';
 import { formatCount } from '../format';
 import { GenomeMap, type GenomeMapSite } from './GenomeMap';
+import { committedSites, deriveBindingRows, siteKey } from './binding-view-model';
 
 const ROLE_LABELS: Readonly<Record<OligoRole, string>> = {
   forward: 'Forward primer',
@@ -21,8 +22,6 @@ const STATUS_LABELS: Readonly<Record<Resolution['status'], string>> = {
   'no-hit': 'Not found',
   'highly-degenerate': 'Needs confirmation',
 };
-
-const siteKey = (site: BindingSite) => `${site.segment}:${site.start}-${site.end}:${site.strand}`;
 
 /** The always-mounted region carrying the reason `Continue` will not advance. */
 const CONTINUE_BLOCKED_ID = 'binding-continue-blocked';
@@ -257,16 +256,7 @@ export function BindingResolution() {
   // confirmation -- everything downstream (Continue, the geometry check, the
   // map) reads `committed` rather than `chosenSites`, so unticking the box
   // renders exactly like never having ticked it.
-  const rows = resolved.map(({ oligo, resolution }) => {
-    const stored = chosenSites[oligo.id];
-    const located = stored ?? resolution.chosen;
-    const confirmed = located !== null && isConfirmed(oligo, located);
-    const committed =
-      stored !== undefined && (resolution.status !== 'highly-degenerate' || confirmed)
-        ? stored
-        : null;
-    return { oligo, resolution, stored, located, confirmed, committed };
-  });
+  const rows = deriveBindingRows(resolved, chosenSites, isConfirmed);
 
   const handleConfirm = (oligo: OligoInput, located: BindingSite | null, confirmed: boolean) => {
     if (located === null) return;
@@ -305,11 +295,7 @@ export function BindingResolution() {
    * every current row is in it.
    */
   const handleContinue = () => {
-    const committed: Record<string, BindingSite> = {};
-    for (const row of rows) {
-      if (row.committed !== null) committed[row.oligo.id] = row.committed;
-    }
-    commitSites(committed);
+    commitSites(committedSites(rows));
     goTo('scope');
   };
 

@@ -3,6 +3,7 @@ import { THREE_PRIME_CRITICAL } from '../../core/analysis/constants';
 import type { PositionStat } from '../../core/analysis/profile';
 import type { OligoAnalysis } from '../../core/analysis/run';
 import { formatCount, formatPercent } from '../format';
+import { noteFor, segmentsFor, titleFor, unattributed } from './position-profile-view-model';
 
 /**
  * Hand-written SVG rather than a charting library. This is a row of stacked
@@ -27,18 +28,6 @@ const FLAG_AREA = 8;
 const SVG_HEIGHT = PLOT_HEIGHT + FLAG_AREA;
 const BAR_X = (COLUMN_WIDTH - BAR_WIDTH) / 2;
 
-const AMBIGUOUS_TITLE = 'reference base is ambiguous; this position cannot be assessed';
-const INFERRED_TITLE = 'per-position coverage not reported';
-
-/** One stacked segment of a bar, already placed. Units are SVG user units. */
-interface Segment {
-  key: string;
-  /** Distance from the axis down-to-up, i.e. the rect's top edge. */
-  y: number;
-  height: number;
-  className: string;
-}
-
 /**
  * The bar's total height encodes `mismatchFraction`, and the stack inside it
  * splits that height between the reported allele classes *in proportion to
@@ -52,47 +41,6 @@ interface Segment {
  * shorter than the rate it is supposed to show. The remainder is drawn as its
  * own neutral segment instead of being quietly dropped.
  */
-function segmentsFor(p: PositionStat): Segment[] {
-  const total = Math.min(1, Math.max(0, p.mismatchFraction)) * PLOT_HEIGHT;
-  if (total <= 0 || p.mismatchCount <= 0) return [];
-  const deletion = (p.deletionCount / p.mismatchCount) * total;
-  const substitution = (p.substitutionCount / p.mismatchCount) * total;
-  const other = Math.max(0, total - deletion - substitution);
-  // Stacked from the axis upward, deletions at the bottom. Each segment's top
-  // edge is derived from the ones below it rather than from a running
-  // accumulator, so nothing here is reassigned mid-render.
-  const heights = [
-    { key: 'deletion', height: deletion, className: 'fill-purple-700' },
-    { key: 'substitution', height: substitution, className: 'fill-rose-600' },
-    { key: 'other', height: other, className: 'fill-slate-500' },
-  ].filter((s) => s.height > 0);
-  return heights.map((s, i) => {
-    const below = heights.slice(0, i).reduce((sum, x) => sum + x.height, 0);
-    return { ...s, y: PLOT_HEIGHT - below - s.height };
-  });
-}
-
-function unattributed(p: PositionStat): boolean {
-  return !p.referenceIsAmbiguous && p.mismatchCount > p.substitutionCount + p.deletionCount;
-}
-
-/** The note column of the hidden table: whatever qualifies this row's numbers. */
-function noteFor(p: PositionStat): string {
-  if (p.referenceIsAmbiguous) {
-    return 'Not assessable: the reference base is ambiguous, so no rate can be computed here.';
-  }
-  if (p.coverageIsInferred) {
-    return 'Per-position coverage not reported; the window denominator is used instead.';
-  }
-  return '';
-}
-
-function titleFor(p: PositionStat): string | null {
-  if (p.referenceIsAmbiguous) return AMBIGUOUS_TITLE;
-  if (p.coverageIsInferred) return INFERRED_TITLE;
-  return null;
-}
-
 interface PositionColumnProps {
   stat: PositionStat;
   hatchId: string;
@@ -100,7 +48,7 @@ interface PositionColumnProps {
 
 function PositionColumn({ stat, hatchId }: PositionColumnProps) {
   const title = titleFor(stat);
-  const segments = stat.referenceIsAmbiguous ? [] : segmentsFor(stat);
+  const segments = stat.referenceIsAmbiguous ? [] : segmentsFor(stat, PLOT_HEIGHT);
   const barHeight = segments.reduce((sum, s) => sum + s.height, 0);
 
   return (

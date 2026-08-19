@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { queryAggregated, type AggregatedRow } from '../../core/lapis/endpoints';
+import { queryAggregated } from '../../core/lapis/endpoints';
 import type { LapisTransport } from '../../core/lapis/transport';
 import { getPathogen, type PathogenId } from '../../core/registry';
 import { useAppStore } from '../../state/store';
+import { mergeSelection, optionValues, scopeValidation } from './scope-view-model';
 
 
 /**
@@ -130,8 +131,6 @@ interface OptionLists {
  * default, so option order would depend on the machine the app happens to run
  * on the moment a name carries a diacritic -- Aaland/Aland, Cote/Cote d'Ivoire.
  */
-const sorted = (values: string[]): string[] => [...values].sort((a, b) => a.localeCompare(b, 'en'));
-
 /**
  * The distinct, sorted, non-empty string values of one metadata field across
  * an aggregated response. `AggregatedRow`'s index signature is
@@ -139,26 +138,7 @@ const sorted = (values: string[]): string[] => [...values].sort((a, b) => a.loca
  * value recorded for the field -- a `null` country is not a country the user
  * can pick, so it is dropped rather than rendered as an empty option.
  */
-function optionValues(rows: AggregatedRow[], field: string): string[] {
-  const seen = new Set<string>();
-  for (const row of rows) {
-    const value = row[field];
-    if (typeof value === 'string' && value !== '') seen.add(value);
-  }
-  return sorted([...seen]);
-}
-
 /** The optgroup a selected value sits in when the dataset does not have it. */
-
-interface MergedOptions {
-  /** Rendered plainly, in the order the load returned them. */
-  options: string[];
-  /**
-   * Selected values the loaded list does not contain, rendered inside a
-   * labelled optgroup. Empty whenever there is no loaded list to judge against.
-   */
-  unmatched: string[];
-}
 
 /**
  * The options actually rendered: everything the load returned, plus any value
@@ -187,12 +167,6 @@ interface MergedOptions {
  * that was never seen, so in that case everything is merged in plainly and the
  * component's existing loading/failure notices speak instead.
  */
-function mergeSelection(loaded: string[] | null, selected: string[]): MergedOptions {
-  if (loaded === null) return { options: sorted([...new Set(selected)]), unmatched: [] };
-  const unmatched = selected.filter((value) => !loaded.includes(value));
-  return { options: loaded, unmatched: sorted([...new Set(unmatched)]) };
-}
-
 interface ScopeControlsProps {
   onRun: () => void;
   /**
@@ -333,11 +307,9 @@ export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
   const lineageOptions = mergeSelection(dataset?.lineages ?? null, scope.lineages);
   const unmatched = [...countryOptions.unmatched, ...lineageOptions.unmatched];
 
+  const { missingDate, inverted, canRun } = scopeValidation(scope);
   const fromMissing = scope.dateFrom === '';
   const toMissing = scope.dateTo === '';
-  const missingDate = fromMissing || toMissing;
-  const inverted = !missingDate && scope.dateTo < scope.dateFrom;
-  const canRun = !missingDate && !inverted;
 
   // Each date field points at the message that is about *it*: an empty field
   // gets the missing-date message, and both fields get the range message,
