@@ -141,6 +141,20 @@ function contrastRatio(a: Rgb, b: Rgb): number {
 // ---------------------------------------------------------------------------
 
 const THEME_CSS = repoFile('node_modules', 'tailwindcss', 'theme.css');
+const INDEX_CSS = repoFile('src', 'index.css');
+
+const VISUAL_TOKENS = [
+  'canvas',
+  'surface',
+  'ink',
+  'muted-ink',
+  'border',
+  'accent',
+  'focus',
+  'success',
+  'warning',
+  'danger',
+] as const;
 
 /** `emerald-900` -> the `oklch(...)` Tailwind will emit for it. */
 function tailwindColor(token: string): string {
@@ -232,5 +246,22 @@ describe('severity badge colour contrast (WCAG AA, 4.5:1)', () => {
     // If a fifth level is added, it must arrive with a colour pair that has
     // been measured, not one that was never looked at.
     expect([...styles.keys()].sort()).toEqual(['amber', 'green', 'red', 'unknown']);
+  });
+});
+
+describe('global visual-system tokens', () => {
+  it('defines the named OKLCH roles used by the application shell', () => {
+    for (const token of VISUAL_TOKENS) {
+      expect(INDEX_CSS).toMatch(
+        new RegExp(`--color-${token}:\\s*oklch\\(\\s*[\\d.]+%\\s+[\\d.]+\\s+[\\d.]+\\s*\\)`),
+      );
+    }
+  });
+
+  it('applies the canvas, ink, selection, and visible keyboard focus globally', () => {
+    expect(INDEX_CSS).toMatch(/body\s*\{[\s\S]*background-color:\s*var\(--color-canvas\)/);
+    expect(INDEX_CSS).toMatch(/body\s*\{[\s\S]*color:\s*var\(--color-ink\)/);
+    expect(INDEX_CSS).toMatch(/::selection\s*\{[\s\S]*background-color:\s*var\(--color-accent\)/);
+    expect(INDEX_CSS).toMatch(/:focus-visible\s*\{[\s\S]*outline:\s*2px solid var\(--color-focus\)/);
   });
 });

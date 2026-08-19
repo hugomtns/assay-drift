@@ -2,11 +2,34 @@
 
 :root {
   color-scheme: light;
+  --color-canvas: oklch(98% 0.006 255);
+  --color-surface: oklch(99% 0.003 255);
+  --color-ink: oklch(20% 0.025 260);
+  --color-muted-ink: oklch(46% 0.025 260);
+  --color-border: oklch(84% 0.012 260);
+  --color-accent: oklch(48% 0.17 262);
+  --color-focus: oklch(54% 0.18 262);
+  --color-success: oklch(45% 0.1 155);
+  --color-warning: oklch(55% 0.13 75);
+  --color-danger: oklch(50% 0.18 28);
 }
 
 body {
   min-height: 100vh;
-  background-color: #f8fafc;
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+::selection {
+  background-color: var(--color-accent);
+  color: var(--color-surface);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 /*
