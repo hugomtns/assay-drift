@@ -1,5 +1,24 @@
 # Decisions
 
+## 2026-08-19 — Workflow orchestration and UI view models stay colocated
+
+`App.tsx` composes the shell and selects the active screen. Permalink restoration/publishing,
+the abortable analysis runner, and the bundled worked-example action live under `src/app/` so
+their lifecycle invariants are tested without turning the root component into an orchestration
+layer. The runner retains one controller at a time: superseded or unmounted runs cannot update
+state or publish a permalink.
+
+The scope, binding, and per-position chart derivations live beside their respective components.
+They are pure helpers with focused tests; they are deliberately not a cross-domain “view model”
+library. This keeps rendering declarative while preserving the existing store and network
+boundaries.
+
+## 2026-08-19 — UI verification has two deterministic layers
+
+Storybook records reusable UI states without live LAPIS requests. Playwright intercepts LAPIS at
+the browser boundary using committed fixtures, covering flows and layout behaviour jsdom cannot
+observe. Both are local release checks; the CI workflow currently retains its faster core gate.
+
 ## 2026-08-01 — Runtime dependencies
 
 - `react`, `react-dom` — UI.

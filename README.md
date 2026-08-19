@@ -111,16 +111,21 @@ The switch is `VITE_LAPIS_PROXY`, and it is only needed when the default guess i
 
 ## Verification
 
-Every task in this project is checked against the same five commands, which are also the CI
-gate (`.github/workflows/ci.yml`):
+The complete local gate is:
 
 ```bash
-npm test              # unit, component, a11y and golden-fixture tests
+npm test:coverage     # unit, component, a11y and golden-fixture tests with coverage
 npm run typecheck
 npm run lint
 npm run verify:assays # every bundled oligo re-resolves and carries a citation
+npm run build-storybook
+npm run test-storybook # non-interactive Storybook compilation check
+npm run test:e2e      # deterministic mocked browser workflow tests
 npm run build
 ```
+
+CI runs the fast non-browser subset (`npm test`, typecheck, lint, assay verification, and build).
+The Storybook and browser suites are local release checks until they are added to CI.
 
 Two more talk to the network and are therefore **not** in the PR gate. They run nightly
 (`.github/workflows/nightly.yml`), and on failure the workflow opens — or comments on an

@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import App from './App';
 import { useAppStore } from './state/store';
 
@@ -47,6 +47,7 @@ describe('App', () => {
   });
 
   it('runs the recommended example in one click', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}));
     const user = userEvent.setup();
     render(<App />);
 

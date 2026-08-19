@@ -21,7 +21,9 @@ test('runs the published assay and shares the reproducible result', async ({ pag
   await page.getByRole('button', { name: /CDC N1 assay/i }).click();
   await expect(page.getByRole('table', { name: 'Assay summary' })).toBeVisible();
   await expect(page.getByText(/Limitations and data-quality notes/)).toBeVisible();
-  await page.getByRole('button', { name: 'Copy link' }).click();
+  const copyLink = page.getByRole('button', { name: 'Copy link' });
+  await copyLink.focus();
+  await copyLink.press('Enter');
   await expect(page.getByRole('status', { name: 'Link copy status' })).toContainText(/link copied|clipboard/i);
 });
 
