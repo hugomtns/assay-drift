@@ -12,6 +12,7 @@ const ROLE_LABELS: Readonly<Record<OligoRole, string>> = {
 
 interface HeadlineCardProps {
   analysis: OligoAnalysis;
+  summary?: boolean;
 }
 
 /**
@@ -46,7 +47,7 @@ interface HeadlineCardProps {
  * mismatch rate over the sequences that happened to be well covered is only
  * meaningful next to it.
  */
-export function HeadlineCard({ analysis }: HeadlineCardProps) {
+export function HeadlineCard({ analysis, summary = false }: HeadlineCardProps) {
   const { metrics } = analysis;
   const headingId = useId();
 
@@ -60,6 +61,19 @@ export function HeadlineCard({ analysis }: HeadlineCardProps) {
           numerator: metrics.nMismatch,
           denominator: metrics.nFullCoverage,
         });
+
+  if (summary) {
+    return (
+      <>
+        <span role="cell" className="font-semibold text-slate-900">{analysis.name}</span>
+        <span role="cell" className="text-slate-600">{ROLE_LABELS[analysis.role]}</span>
+        <span role="cell" className="tabular-nums">{rate}</span>
+        <span role="cell" className="tabular-nums">
+          {`Coverage gap: ${formatCount(metrics.coverageGap)} of ${formatCount(metrics.nScope)} (${formatPercent(metrics.coverageGapFraction)})`}
+        </span>
+      </>
+    );
+  }
 
   return (
     <article

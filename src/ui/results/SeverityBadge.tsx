@@ -63,6 +63,7 @@ function LevelIcon({ level }: { level: SeverityLevel }) {
 interface SeverityBadgeProps {
   severity: Severity;
   role: OligoRole;
+  compact?: boolean;
 }
 
 /**
@@ -80,7 +81,7 @@ interface SeverityBadgeProps {
  * mismatches and weights them by position; it models neither hybridisation nor
  * amplification, so the badge says what to look at, never what will happen.
  */
-export function SeverityBadge({ severity, role }: SeverityBadgeProps) {
+export function SeverityBadge({ severity, role, compact = false }: SeverityBadgeProps) {
   const weighting =
     role === 'probe'
       ? 'Positions are weighted uniformly for a probe.'
@@ -95,7 +96,7 @@ export function SeverityBadge({ severity, role }: SeverityBadgeProps) {
         <span>{SEVERITY_LABELS[severity.level]}</span>
       </p>
 
-      {severity.reasons.length > 0 && (
+      {!compact && severity.reasons.length > 0 && (
         <ul className="list-disc pl-5 text-sm text-slate-700">
           {severity.reasons.map((reason) => (
             <li key={reason}>{reason}</li>
@@ -103,8 +104,8 @@ export function SeverityBadge({ severity, role }: SeverityBadgeProps) {
         </ul>
       )}
 
-      <p className="text-xs text-slate-600">{weighting}</p>
-      <p className="text-xs text-slate-600">{SEVERITY_DISCLAIMER}</p>
+      {!compact && <p className="text-xs text-slate-600">{weighting}</p>}
+      {!compact && <p className="text-xs text-slate-600">{SEVERITY_DISCLAIMER}</p>}
     </div>
   );
 }

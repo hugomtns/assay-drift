@@ -14,10 +14,19 @@ describe('CaveatPanel', () => {
     }
   });
 
-  it('is not collapsible', () => {
+  it('keeps the complete caveats in a labelled disclosure', () => {
     const { container } = render(<CaveatPanel result={result([])} />);
-    expect(container.querySelector('details')).toBeNull();
-    expect(container.querySelector('[hidden]')).toBeNull();
+    const details = container.querySelector('details');
+    expect(details).not.toBeNull();
+    expect(details).not.toHaveAttribute('open');
+    expect(screen.getByText('Limitations and data-quality notes')).toBeInTheDocument();
+  });
+
+  it('opens the disclosure when the analysis contains a warning', () => {
+    const { container } = render(<CaveatPanel result={result([
+      { id: 'coverage-gap', severity: 'warn', message: 'The rate is not interpretable.' },
+    ])} />);
+    expect(container.querySelector('details')).toHaveAttribute('open');
   });
 
   it('renders live diagnostics once even when several oligos report the same one', () => {

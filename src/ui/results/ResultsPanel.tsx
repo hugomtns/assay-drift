@@ -124,23 +124,33 @@ export function ResultsPanel({ result, transport }: ResultsPanelProps) {
         Step 4: What the sequences show
       </h2>
 
+      <div role="table" aria-label="Assay summary" className="border-b border-slate-200">
+        <div role="row" className="sr-only text-xs font-medium text-slate-600 sm:not-sr-only sm:grid sm:grid-cols-[minmax(8rem,1fr)_minmax(8rem,1fr)_minmax(13rem,1.4fr)_minmax(16rem,1.8fr)_minmax(8rem,1fr)] sm:gap-x-3 sm:pb-2">
+          <span role="columnheader">Oligo</span>
+          <span role="columnheader">Role</span>
+          <span role="columnheader">Mismatch rate</span>
+          <span role="columnheader">Coverage gap</span>
+          <span role="columnheader">Severity</span>
+        </div>
+        {result.oligos.map((oligo) => (
+          <div key={oligo.oligoId} role="row" className="grid gap-x-3 gap-y-1 border-t border-slate-200 py-3 sm:grid-cols-[minmax(8rem,1fr)_minmax(8rem,1fr)_minmax(13rem,1.4fr)_minmax(16rem,1.8fr)_minmax(8rem,1fr)] sm:items-center">
+            <HeadlineCard analysis={oligo} summary />
+            <div role="cell">
+              <SeverityBadge severity={oligo.severity} role={oligo.role} compact />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <p className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+        Sampled sequences are not infections. Sequences with ambiguous bases at this site are excluded from rates. An in-silico mismatch is not assay failure.
+      </p>
+
+      <CaveatPanel result={result} />
+
       <p className="text-sm text-slate-700">
         {`${formatCount(result.nScope)} ${cfg.label} sequences match this scope, collected ${result.scope.dateFrom} to ${result.scope.dateTo} inclusive. Data version ${result.dataVersion}, read ${result.generatedAt}, over ${formatCount(result.queryCount)} queries.`}
       </p>
-
-      {/*
-        Above the numbers, not below them.
-
-        Global Constraint 7 says this panel is never collapsed, and it never
-        was -- no <details>, no `hidden`. But walking the deployed site put it
-        at 6,058px on a 6,877px page: with the app's own three-oligo worked
-        example the reader met the caveats only after scrolling past every
-        figure they qualify. A caveat that far down is one the reader has
-        already decided not to read, which is the exact failure the constraint
-        exists to prevent -- reached by position rather than by a widget.
-        Nothing in the suite could see it, because jsdom has no layout.
-      */}
-      <CaveatPanel result={result} />
 
       <ExportButtons result={result} />
 

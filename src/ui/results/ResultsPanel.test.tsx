@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect } from 'vitest';
 import { ResultsPanel } from './ResultsPanel';
@@ -118,6 +118,25 @@ describe('ResultsPanel', () => {
     expect(screen.getAllByText(FIXED_CAVEATS[0]!)).toHaveLength(1);
   });
 
+  it('puts a count-backed assay summary immediately below the result heading', () => {
+    render(<ResultsPanel result={result()} />);
+    const summary = screen.getByRole('table', { name: 'Assay summary' });
+    expect(within(summary).getAllByRole('row')).toHaveLength(4);
+    expect(within(summary).getAllByText('95.9% (67,520 of 70,387)')).toHaveLength(3);
+    expect(within(summary).getAllByText('Coverage gap: 755 of 71,142 (1.1%)')).toHaveLength(3);
+    expect(within(summary).getAllByRole('cell')).toHaveLength(15);
+  });
+
+  it('shows the three interpretation facts before the limitations disclosure', () => {
+    const { container } = render(<ResultsPanel result={result()} />);
+    const interpretation = screen.getByText(/sampled sequences are not infections/i);
+    expect(interpretation).toHaveTextContent(/ambiguous bases.*excluded/i);
+    expect(interpretation).toHaveTextContent(/mismatch is not assay failure/i);
+    const limitations = screen.getByText('Limitations and data-quality notes');
+    expect(interpretation.compareDocumentPosition(limitations) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.querySelector('details')).not.toHaveAttribute('open');
+  });
+
   it('offers the exports and the methods paragraph, once for the whole result', () => {
     render(<ResultsPanel result={result()} />);
     expect(
@@ -188,12 +207,12 @@ describe('ResultsPanel — what the browser found and jsdom could not', () => {
     expect(order & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('does not number the caveat panel as a fifth step', () => {
+  it('does not number the limitations disclosure as a fifth step', () => {
     // The step navigation has four steps, and this panel now precedes step 4's
     // own figures. A "Step 5" heading would be wrong twice over.
     render(<ResultsPanel result={sampleResult} />);
-    const heading = screen.getByRole('heading', { name: /what they do not tell you/i });
-    expect(heading.textContent).not.toMatch(/step\s*5/i);
+    const disclosure = screen.getByText('Limitations and data-quality notes');
+    expect(disclosure.textContent).not.toMatch(/step\s*5/i);
   });
 
   it('gives every horizontally scrolling region keyboard access', () => {

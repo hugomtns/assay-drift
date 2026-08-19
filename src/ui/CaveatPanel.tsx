@@ -81,30 +81,34 @@ interface CaveatPanelProps {
  * wrong twice over. It is not a step the user takes; it is what they should
  * have in hand before reading the ones they asked for.
  *
- * Global Constraint 7 -- this panel is never collapsed. No <details>, no
- * `hidden`, no accordion, no "show more". A caveat behind a click is a caveat
- * the user has already decided not to read, and the entire point of the panel
- * is that the reader meets it without choosing to. Anything added here must
- * stay unconditionally visible.
+ * The compact interpretation strip in `ResultsPanel` is always visible. The
+ * complete, unchanged caveats and live diagnostics are grouped here in an
+ * accessible disclosure, which opens automatically whenever a warning makes
+ * the result unreliable.
  */
 export function CaveatPanel({ result }: CaveatPanelProps) {
   const diagnostics = liveDiagnostics(result);
+  const isUnreliable =
+    diagnostics.some((diagnostic) => diagnostic.severity === 'warn') ||
+    result.oligos.some((oligo) => oligo.severity?.level === 'unknown');
 
   return (
-    <section aria-labelledby="caveat-panel-heading" className="flex flex-col gap-4">
-      <h2 id="caveat-panel-heading" className="text-xl font-semibold">
-        Before you read these numbers: what they do not tell you
-      </h2>
+    <section aria-labelledby="caveat-panel-heading">
+      <details open={isUnreliable} className="rounded border border-slate-200 p-3">
+        <summary id="caveat-panel-heading" className="cursor-pointer font-semibold text-slate-900">
+          Limitations and data-quality notes
+        </summary>
 
-      <ul className="flex list-disc flex-col gap-2 pl-5 text-sm text-slate-700">
-        {FIXED_CAVEATS.map((caveat) => (
-          <li key={caveat}>{caveat}</li>
-        ))}
-      </ul>
+        <div className="mt-4 flex flex-col gap-4">
+          <ul className="flex list-disc flex-col gap-2 pl-5 text-sm text-slate-700">
+            {FIXED_CAVEATS.map((caveat) => (
+              <li key={caveat}>{caveat}</li>
+            ))}
+          </ul>
 
-      {diagnostics.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <h3 className="text-base font-semibold">About this particular analysis</h3>
+          {diagnostics.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <h3 className="text-base font-semibold">About this particular analysis</h3>
           {/*
             The severity of a diagnostic used to be an amber text colour and
             nothing else -- invisible in greyscale, invisible to a screen
@@ -113,21 +117,23 @@ export function CaveatPanel({ result }: CaveatPanelProps) {
             goes in front of the message, so the distinction survives being
             printed, read aloud, or pasted into an email as plain text.
           */}
-          <ul className="flex list-disc flex-col gap-2 pl-5 text-sm">
-            {diagnostics.map((diagnostic) => (
-              <li
-                key={diagnostic.id}
-                className={diagnostic.severity === 'warn' ? 'text-amber-900' : 'text-slate-700'}
-              >
-                <span className="font-semibold">
-                  {diagnostic.severity === 'warn' ? 'Warning: ' : 'Note: '}
-                </span>
-                {diagnostic.message}
-              </li>
-            ))}
-          </ul>
+              <ul className="flex list-disc flex-col gap-2 pl-5 text-sm">
+                {diagnostics.map((diagnostic) => (
+                  <li
+                    key={diagnostic.id}
+                    className={diagnostic.severity === 'warn' ? 'text-amber-900' : 'text-slate-700'}
+                  >
+                    <span className="font-semibold">
+                      {diagnostic.severity === 'warn' ? 'Warning: ' : 'Note: '}
+                    </span>
+                    {diagnostic.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
-      )}
+      </details>
     </section>
   );
 }
