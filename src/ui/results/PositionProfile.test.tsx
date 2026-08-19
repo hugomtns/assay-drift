@@ -26,6 +26,7 @@ describe('PositionProfile', () => {
       stat({ refPos: 21766, oligoIndex: 1, distanceFrom3Prime: 20 }),
     ])} />);
     const table = screen.getByRole('table');
+    expect(table.parentElement).toHaveClass('sr-only');
     expect(within(table).getAllByRole('row')).toHaveLength(3);
 
     const first = within(table).getByRole('row', { name: /21,765/ });

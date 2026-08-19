@@ -6,4 +6,9 @@ const meta = { title: 'Results/Position profile', component: PositionProfile, ar
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
-export const NarrowViewport: Story = { parameters: { viewport: { defaultViewport: 'narrow' } } };
+export const NarrowViewport: Story = {
+  parameters: {
+    viewport: { defaultViewport: 'narrow' },
+    docs: { description: { story: 'The accessible data table stays visually hidden at narrow widths.' } },
+  },
+};

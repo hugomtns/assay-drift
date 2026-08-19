@@ -286,7 +286,8 @@ export function PositionProfile({ analysis }: PositionProfileProps) {
         position was not queried, so `0.0%` there would state the site is
         conserved somewhere we cannot see at all.
       */}
-      <table className="sr-only">
+      <div className="sr-only">
+        <table>
         <caption>
           {`Per-position mismatch for ${analysis.name}, with the counts each rate was computed from. Rows read 5′ to 3′.`}
         </caption>
@@ -316,7 +317,8 @@ export function PositionProfile({ analysis }: PositionProfileProps) {
             </tr>
           ))}
         </tbody>
-      </table>
+        </table>
+      </div>
 
       {anyTerminal && (
         <p className="text-xs text-amber-900">
