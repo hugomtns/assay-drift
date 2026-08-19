@@ -128,6 +128,7 @@ function reconcileManualRoles(
 
 export function OligoInputPanel() {
   const [text, setText] = useState('');
+  const [continueAttempted, setContinueAttempted] = useState(false);
   const roles = useAppStore((s) => s.roles);
   const setOligos = useAppStore((s) => s.setOligos);
   const setRole = useAppStore((s) => s.setRole);
@@ -213,6 +214,7 @@ export function OligoInputPanel() {
       : roleless.length > 0
         ? `Every oligo needs a role before this step can continue. Still waiting on: ${roleless.join(', ')}.`
         : '';
+  const showBlockedReason = !canContinue && (text.trim().length > 0 || continueAttempted);
 
   /**
    * Leaving this step is the first moment anything reads `oligos` and `roles`
@@ -257,6 +259,7 @@ export function OligoInputPanel() {
           id="oligo-textarea"
           onChange={(e) => setText(e.target.value)}
           rows={8}
+          placeholder={'>N1-F\nGACCCCAAAATCAGCGAAAT'}
           className="w-full rounded border border-slate-300 px-2 py-1 font-mono text-sm"
         />
       </div>
@@ -291,8 +294,11 @@ export function OligoInputPanel() {
         })}
       </ul>
 
-      {/* Always mounted, text swapped in; see BindingResolution for why. */}
-      <p id={CONTINUE_BLOCKED_ID} role="status" className="text-sm text-slate-600">
+      <p
+        id={CONTINUE_BLOCKED_ID}
+        role="status"
+        className={showBlockedReason ? 'text-sm text-slate-600' : 'sr-only'}
+      >
         {blockedReason}
       </p>
 
@@ -301,7 +307,11 @@ export function OligoInputPanel() {
         aria-disabled={!canContinue}
         aria-describedby={canContinue ? undefined : CONTINUE_BLOCKED_ID}
         onClick={() => {
-          if (canContinue) handleContinue();
+          if (canContinue) {
+            handleContinue();
+          } else {
+            setContinueAttempted(true);
+          }
         }}
         className={`self-start rounded px-4 py-2 ${
           canContinue ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-700'

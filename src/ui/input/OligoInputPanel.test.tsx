@@ -36,6 +36,16 @@ const type = async (text: string) => {
 };
 
 describe('OligoInputPanel', () => {
+  it('keeps empty-state validation visually quiet until Continue is attempted', async () => {
+    const user = userEvent.setup();
+    render(<OligoInputPanel />);
+
+    expect(screen.getByLabelText(/paste your oligos/i)).toHaveAttribute('placeholder', expect.stringContaining('N1-F'));
+    expect(screen.getByRole('status')).toHaveClass('sr-only');
+    await user.click(screen.getByRole('button', { name: /continue/i }));
+    expect(screen.getByRole('status')).not.toHaveClass('sr-only');
+  });
+
   it('lists parsed oligos with their lengths', async () => {
     render(<OligoInputPanel />);
     await type('>N1-F\nGACCCCAAAATCAGCGAAAT');

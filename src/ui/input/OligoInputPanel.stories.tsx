@@ -24,6 +24,18 @@ export const ParsedOligo: Story = {
   },
 };
 
+export const MissingRole: Story = {
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.type(canvas.getByLabelText(/paste your oligos/i), 'ACGTACGTACGTACGTACGT');
+  },
+};
+
+export const ParseError: Story = {
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.type(canvas.getByLabelText(/paste your oligos/i), '>bad\nACGTXACGTACGTACGT');
+  },
+};
+
 export const NarrowViewport: Story = {
   parameters: { viewport: { defaultViewport: 'narrow' } },
 };
