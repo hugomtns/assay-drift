@@ -60,10 +60,10 @@ export function HeadlineCard({ analysis }: HeadlineCardProps) {
 
   return (
     <>
-      <span role="cell" className="font-semibold text-slate-900">{analysis.name}</span>
-      <span role="cell" className="text-slate-600">{ROLE_LABELS[analysis.role]}</span>
-      <span role="cell" className="tabular-nums">{rate}</span>
-      <span role="cell" className="tabular-nums">
+      <span role="cell" className="min-w-0 break-words font-semibold text-slate-900">{analysis.name}</span>
+      <span role="cell" className="min-w-0 break-words text-slate-600">{ROLE_LABELS[analysis.role]}</span>
+      <span role="cell" className="min-w-0 break-words tabular-nums">{rate}</span>
+      <span role="cell" className="min-w-0 break-words tabular-nums">
         {`Coverage gap: ${formatCount(metrics.coverageGap)} of ${formatCount(metrics.nScope)} (${formatPercent(metrics.coverageGapFraction)})`}
       </span>
     </>

@@ -126,7 +126,7 @@ export function TrendChart({ trend }: TrendChartProps) {
         being focused is a scrollable area, not a picture.
       */}
       <div
-        className="overflow-x-auto"
+        className="max-w-full overflow-x-auto"
         tabIndex={0}
         role="group"
         aria-label={`Mismatch rate chart by ${granularity}, scrollable`}

@@ -296,7 +296,7 @@ export function PositionProfile({ analysis }: PositionProfileProps) {
         see this and the deployed site could.
       */}
       <div
-        className="overflow-x-auto"
+        className="max-w-full overflow-x-auto"
         tabIndex={0}
         role="group"
         aria-label={`Per-position mismatch chart for ${analysis.name}, scrollable`}

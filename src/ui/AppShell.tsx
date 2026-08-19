@@ -40,7 +40,7 @@ export function AppShell({ step, onStepChange, pathogenSelector, children }: App
   const currentIndex = STEPS.findIndex((s) => s.id === step);
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6 p-4 sm:p-6">
+    <div className="mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-6 p-4 sm:p-6">
       <header className="flex flex-col gap-4">
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <h1 className="text-xl font-semibold">Assay Drift Watch</h1>
@@ -80,7 +80,7 @@ export function AppShell({ step, onStepChange, pathogenSelector, children }: App
         </ol>
       </header>
 
-      <main>{children}</main>
+      <main className="min-w-0">{children}</main>
 
       <footer className="flex max-w-[70ch] flex-col gap-2 border-t border-slate-200 pt-4 text-sm text-slate-600">
         <p id="regulatory-statement">{REGULATORY_STATEMENT}</p>

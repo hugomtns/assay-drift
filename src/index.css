@@ -16,10 +16,21 @@
 
 body {
   min-height: 100vh;
+  min-width: 0;
   background-color: var(--color-canvas);
   color: var(--color-ink);
   font-family: ui-sans-serif, system-ui, sans-serif;
   line-height: 1.5;
+}
+
+#root {
+  min-width: 0;
+}
+
+/* Data regions scroll locally. Long labels wrap instead of widening the page. */
+table,
+[role='table'] {
+  max-width: 100%;
 }
 
 ::selection {

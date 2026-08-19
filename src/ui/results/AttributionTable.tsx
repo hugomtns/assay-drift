@@ -59,7 +59,7 @@ export function AttributionTable({ attribution, label, oligoName }: AttributionT
         {label}
       </h4>
 
-      <table className="w-full max-w-md border-collapse text-sm">
+      <table className="w-full max-w-md table-fixed border-collapse text-sm">
         <caption className="mb-1 text-left text-xs text-slate-600">
           {`Shares are of sequences carrying a mismatch in this binding site (n = ${formatCount(total)}), not of all sequences in scope.`}
         </caption>
@@ -79,7 +79,7 @@ export function AttributionTable({ attribution, label, oligoName }: AttributionT
         <tbody>
           {rows.map((row) => (
             <tr key={row.value} className="border-b border-slate-100">
-              <th scope="row" className="py-1 pr-3 font-normal">
+              <th scope="row" className="break-words py-1 pr-3 font-normal">
                 {row.value}
               </th>
               <td className="py-1 pr-3 text-right tabular-nums">{formatCount(row.count)}</td>

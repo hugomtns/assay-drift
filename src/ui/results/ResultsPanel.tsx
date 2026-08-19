@@ -152,7 +152,7 @@ export function ResultsPanel({ result, transport }: ResultsPanelProps) {
         Step 4: What the sequences show
       </h2>
 
-      <div role="table" aria-label="Assay summary" className="border-b border-slate-200">
+      <div role="table" aria-label="Assay summary" className="min-w-0 border-b border-slate-200">
         <div role="row" className="sr-only text-xs font-medium text-slate-600 sm:not-sr-only sm:grid sm:grid-cols-[minmax(8rem,1fr)_minmax(8rem,1fr)_minmax(13rem,1.4fr)_minmax(16rem,1.8fr)_minmax(8rem,1fr)] sm:gap-x-3 sm:pb-2">
           <span role="columnheader">Oligo</span>
           <span role="columnheader">Role</span>
@@ -161,9 +161,9 @@ export function ResultsPanel({ result, transport }: ResultsPanelProps) {
           <span role="columnheader">Severity</span>
         </div>
         {result.oligos.map((oligo) => (
-          <div key={oligo.oligoId} role="row" className="grid gap-x-3 gap-y-1 border-t border-slate-200 py-3 sm:grid-cols-[minmax(8rem,1fr)_minmax(8rem,1fr)_minmax(13rem,1.4fr)_minmax(16rem,1.8fr)_minmax(8rem,1fr)] sm:items-center">
+          <div key={oligo.oligoId} role="row" className="grid min-w-0 gap-x-3 gap-y-1 border-t border-slate-200 py-3 sm:grid-cols-[minmax(8rem,1fr)_minmax(8rem,1fr)_minmax(13rem,1.4fr)_minmax(16rem,1.8fr)_minmax(8rem,1fr)] sm:items-center">
             <HeadlineCard analysis={oligo} />
-            <div role="cell">
+            <div role="cell" className="min-w-0">
               <SeverityBadge severity={oligo.severity} compact />
             </div>
           </div>

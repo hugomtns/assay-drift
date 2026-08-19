@@ -35,7 +35,7 @@ function SelectedFilters({ label, values, unmatched, onRemove }: SelectedFilters
   if (values.length === 0) return null;
 
   return (
-    <ul aria-label={`Selected ${label} filters`} className="flex flex-wrap gap-2">
+    <ul aria-label={`Selected ${label} filters`} className="flex min-w-0 flex-wrap gap-2">
       {values.map((value) => {
         const unavailable = unmatched.includes(value);
         return (
@@ -43,7 +43,7 @@ function SelectedFilters({ label, values, unmatched, onRemove }: SelectedFilters
             <button
               type="button"
               onClick={() => onRemove(value)}
-              className="rounded border border-slate-300 bg-slate-50 px-2 py-1 text-sm text-slate-800"
+              className="max-w-full break-words rounded border border-slate-300 bg-slate-50 px-2 py-1 text-sm text-slate-800"
               aria-label={`Remove ${label} filter ${value}${unavailable ? ', not in the loaded dataset' : ''}`}
             >
               {`${label}: ${value} \u00d7`}
@@ -62,7 +62,7 @@ function FilterList({ label, values, selected, unmatched, onChange }: FilterList
     onChange(selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value]);
 
   return (
-    <fieldset className="flex min-w-56 flex-col gap-2">
+    <fieldset className="flex min-w-0 flex-1 basis-56 flex-col gap-2">
       <legend className="text-sm font-medium text-slate-900">{label}</legend>
       <label className="sr-only" htmlFor={`scope-filter-${label}`}>{`Filter ${label}`}</label>
       <input
@@ -75,7 +75,7 @@ function FilterList({ label, values, selected, unmatched, onChange }: FilterList
       />
       <div className="max-h-52 overflow-y-auto rounded border border-slate-300 p-2">
         {[...visible, ...unmatched].map((value) => (
-          <label key={value} className="flex items-center gap-2 py-1 text-sm">
+          <label key={value} className="flex min-w-0 items-start gap-2 py-1 text-sm break-words">
             <input type="checkbox" checked={selected.includes(value)} onChange={() => toggle(value)} />
             {value}
           </label>
@@ -479,7 +479,7 @@ export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
         same moment as its text is frequently never announced -- the live region
         has to exist before the content arrives for the announcement to fire.
       */}
-      <p id={OPTIONS_MESSAGE_ID} role="status" className="text-xs text-slate-600">
+      <p id={OPTIONS_MESSAGE_ID} role="status" className="break-words text-xs text-slate-600">
         {optionsMessage}
       </p>
 
