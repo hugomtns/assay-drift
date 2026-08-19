@@ -1,32 +1,14 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type ReactNode,
-} from 'react';
-import { runAnalysis, type AnalysisOligo } from './core/analysis/run';
-import { findBindingSites, type BindingSite } from './core/binding';
+import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { withCache } from './core/lapis/caching-transport';
 import { createFetchTransport } from './core/lapis/fetch-transport';
 import { createProxyTransport, shouldUseProxy } from './core/lapis/proxy-transport';
-import type { OligoInput } from './core/oligo-input';
-import {
-  decodePermalink,
-  encodePermalink,
-  PERMALINK_PREFIX,
-  type PermalinkScope,
-  type PermalinkState,
-} from './core/permalink';
-import { getPathogen, PATHOGENS, type PathogenId } from './core/registry';
-import { resolveBindingSite } from './core/resolution';
-import type { Scope } from './core/scope';
-import libraryRaw from './data/assays/library.json';
-import { parseLibrary, type LibraryAssay } from './data/assays/schema';
-import { loadReference } from './data/references';
+import { PERMALINK_PREFIX } from './core/permalink';
+import { getPathogen } from './core/registry';
 import { useAppStore } from './state/store';
+import { PathogenSelector } from './app/PathogenSelector';
+import { restoreFromHash } from './app/permalink';
+import { useAnalysisRunner } from './app/use-analysis-runner';
+import { prepareWorkedExample } from './app/worked-example';
 import { AnalysisAnnouncer } from './ui/AnalysisAnnouncer';
 import { AppShell } from './ui/AppShell';
 import { BindingResolution } from './ui/binding/BindingResolution';
@@ -39,238 +21,6 @@ import { CopyLinkButton } from './ui/results/ExportButtons';
 import { ResultsPanel } from './ui/results/ResultsPanel';
 import { ScopeControls } from './ui/scope/ScopeControls';
 
-/** The label says "since 2020", so the scope the example loads starts there. */
-const WORKED_EXAMPLE_DATE_FROM = '2020-01-01';
-
-/**
- * The landing screen's one-click example: the CDC 2019-nCoV_N1 assay, taken
- * from the bundled library rather than spelled out here.
- *
- * No primer sequence appears anywhere in this file, and that is the point.
- * `src/data/assays/library.json` is the one place oligos live, every entry is
- * traced to an opened source in `docs/assay-sources.md`, and every entry is
- * re-resolved against the bundled reference by `npm run verify:assays` in CI.
- * A second copy here would be a second thing to keep true, checked by nothing:
- * one wrong base does not error, it resolves somewhere else and prints a
- * confident, wrong percentage.
- *
- * Looked up by id and thrown on if missing, because a landing button that
- * quietly does nothing is worse than a build that stops.
- */
-function bundledAssay(id: string): LibraryAssay {
-  const assay = parseLibrary(libraryRaw).assays.find((a) => a.id === id);
-  if (assay === undefined) {
-    throw new Error(`The bundled assay library has no assay with id "${id}".`);
-  }
-  return assay;
-}
-
-const WORKED_EXAMPLE = bundledAssay('cdc-2019-ncov-n1');
-
-/**
- * The oligos the analysis can actually run on: those with both a role and a
- * site the user committed in step 2.
- *
- * Steps 1 and 2 already refuse to advance until every oligo has both, so this
- * never drops anything in practice; it exists because `AnalysisOligo` requires
- * a non-null role and a site, and silently coercing a missing one would be the
- * failure mode this whole flow is built to prevent.
- */
-function analysisOligos(state: ReturnType<typeof useAppStore.getState>): AnalysisOligo[] {
-  const out: AnalysisOligo[] = [];
-  for (const oligo of state.oligos) {
-    const role = state.roles[oligo.id] ?? oligo.role;
-    const site = state.chosenSites[oligo.id];
-    if (role === null || site === undefined) continue;
-    out.push({ id: oligo.id, name: oligo.name, role, sequence: oligo.sequence, site });
-  }
-  return out;
-}
-
-const messageOf = (err: unknown): string =>
-  err instanceof Error ? err.message : `Unexpected error: ${String(err)}`;
-
-/** Everything a decoded link has to become before the store will accept it. */
-interface RestoredQuery {
-  pathogenId: PathogenId;
-  oligos: OligoInput[];
-  /** Keyed by the store's oligo id, not by name. */
-  sites: Record<string, BindingSite>;
-  scope: PermalinkScope;
-}
-
-/**
- * A URL hash into a runnable query, or `null` if it is not one.
- *
- * `decodePermalink` refuses anything malformed, but it deliberately knows
- * nothing about reference genomes, so it cannot tell whether the site a link
- * names is a site that oligo actually has. That check belongs here, and it is
- * not a formality: a link is untrusted input, and `start()` would otherwise
- * happily build a window from a segment name and a coordinate a stranger chose.
- *
- * The site is re-derived rather than reconstructed arithmetically. A link
- * carries only segment, strand and start; `end`, `mismatches` and
- * `mismatchOligoIndexes` are functions of the oligo and the reference, and
- * every one of them feeds a printed number. Taking them from
- * `findBindingSites` means a restored analysis is the same object the app would
- * have produced itself, and a link that names a position the oligo does not
- * bind is rejected rather than analysed at a plausible-looking coordinate.
- */
-function restoreFromHash(hash: string): RestoredQuery | null {
-  const decoded = decodePermalink(hash);
-  if (decoded === null) return null;
-  try {
-    const reference = loadReference(decoded.pathogenId);
-    const oligos: OligoInput[] = [];
-    const sites: Record<string, BindingSite> = {};
-    for (const [index, oligo] of decoded.oligos.entries()) {
-      const id = `oligo-${index}`;
-      const wanted = decoded.sites[oligo.name];
-      if (wanted === undefined) return null;
-      const site = findBindingSites(oligo.sequence, reference).find(
-        (candidate) =>
-          candidate.segment === wanted.segment &&
-          candidate.strand === wanted.strand &&
-          candidate.start === wanted.start,
-      );
-      if (site === undefined) return null;
-      oligos.push({ id, name: oligo.name, role: oligo.role, sequence: oligo.sequence });
-      sites[id] = site;
-    }
-    return { pathogenId: decoded.pathogenId, oligos, sites, scope: decoded.scope };
-  } catch {
-    // A link does not get to crash the app on the way in.
-    return null;
-  }
-}
-
-/**
- * Replaces the URL hash with a link that reproduces the analysis just finished.
- *
- * `replaceState`, never `pushState`: a result the user did not navigate to
- * should not become a back-button stop, and re-running with a tweaked scope
- * would otherwise leave a trail of half-considered queries behind the one
- * on screen.
- *
- * Called only from the success path, so the address bar never advertises a
- * result that a failed or superseded run did not produce.
- */
-function publishPermalink(scope: Scope, oligos: AnalysisOligo[]): void {
-  const state: PermalinkState = {
-    pathogenId: scope.pathogenId,
-    oligos: oligos.map((o) => ({ name: o.name, role: o.role, sequence: o.sequence })),
-    sites: Object.fromEntries(
-      oligos.map((o) => [
-        o.name,
-        { segment: o.site.segment, strand: o.site.strand, start: o.site.start },
-      ]),
-    ),
-    scope: {
-      dateFrom: scope.dateFrom,
-      dateTo: scope.dateTo,
-      countries: scope.countries,
-      lineages: scope.lineages,
-    },
-  };
-  try {
-    window.history.replaceState(null, '', encodePermalink(state));
-  } catch {
-    // Too large for a usable link, or two oligos share a name. Clearing is the
-    // honest outcome: a stale hash from an earlier run would claim to
-    // reproduce the result now on screen. `CopyLinkButton` reads the hash back
-    // at click time, so it says so rather than copying a URL that lies.
-    window.history.replaceState(null, '', window.location.pathname + window.location.search);
-  }
-}
-
-interface PathogenSelectorProps {
-  value: PathogenId;
-  hasAnalysisInputs: boolean;
-  onChange: (id: PathogenId) => void;
-}
-
-function PathogenSelector({ value, hasAnalysisInputs, onChange }: PathogenSelectorProps) {
-  const [requestedId, setRequestedId] = useState<PathogenId | null>(null);
-  const requestedLabel = requestedId === null ? null : PATHOGENS[requestedId].label;
-
-  const requestChange = (id: PathogenId): void => {
-    if (id === value) return;
-    if (hasAnalysisInputs) {
-      setRequestedId(id);
-      return;
-    }
-    onChange(id);
-  };
-
-  const confirmChange = (): void => {
-    if (requestedId === null) return;
-    onChange(requestedId);
-    setRequestedId(null);
-  };
-
-  return (
-    <div className="flex max-w-sm flex-col gap-2">
-      <label htmlFor="pathogen-select" className="text-sm font-medium text-slate-900">
-        Pathogen
-      </label>
-      <select
-        id="pathogen-select"
-        value={value}
-        onChange={(e) => requestChange(e.target.value as PathogenId)}
-        className="w-64 rounded border border-slate-300 px-2 py-1"
-      >
-        {Object.values(PATHOGENS).map((cfg) => (
-          <option key={cfg.id} value={cfg.id}>
-            {cfg.label}
-          </option>
-        ))}
-      </select>
-      {requestedId !== null && (
-        <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
-          <p>{`Switch to ${requestedLabel}? Changing it clears the oligos and any analysis already run.`}</p>
-          <button
-            type="button"
-            onClick={confirmChange}
-            className="rounded bg-slate-900 px-3 py-1 text-sm text-white"
-          >
-            Change pathogen
-          </button>
-          <button
-            type="button"
-            onClick={() => { setRequestedId(null); }}
-            className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-900"
-          >
-            Keep current
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * The assembled application.
- *
- * Step content is chosen by the store's `step`, but `status` outranks it:
- * while a query is in flight or has failed, the loading or error state
- * replaces the step entirely rather than sitting beside it. That is what makes
- * the two states unambiguous -- a spinner next to a still-interactive "Run
- * analysis" invites a second run over the first, and an error banner under a
- * results panel leaves the user reading numbers from a run that did not
- * finish.
- *
- * `status` also has to drive them because it is the only thing that can. It is
- * set by the store, and a run started from anywhere (the scope step, the
- * worked example, "Try again") has to light the same indicator; tracking an
- * in-flight promise here instead would give three sources of truth for one
- * fact.
- *
- * Every run is abortable and supersedes the last (Global Constraint 10). One
- * controller is held in a ref: starting a run aborts whatever was in flight,
- * unmounting aborts as well, and both settle paths check `aborted` before
- * writing, so a superseded run can never overwrite the run that replaced it
- * with an older answer.
- */
 export default function App() {
   const [entryPath, setEntryPath] = useState<'published' | 'paste'>('published');
   const step = useAppStore((s) => s.step);
@@ -311,42 +61,7 @@ export default function App() {
       withCache(shouldUseProxy(import.meta.env) ? createProxyTransport() : createFetchTransport()),
     [],
   );
-  const runRef = useRef<AbortController | null>(null);
-
-  const start = useCallback(() => {
-    runRef.current?.abort();
-    const controller = new AbortController();
-    runRef.current = controller;
-
-    const state = useAppStore.getState();
-    const { scope } = state;
-    const oligos = analysisOligos(state);
-    // Synchronous: the references are bundled JSON, not a fetch.
-    const reference = loadReference(scope.pathogenId);
-
-    state.startAnalysis();
-    runAnalysis({ transport, scope, oligos, reference, signal: controller.signal })
-      .then((analysis) => {
-        if (controller.signal.aborted) return;
-        useAppStore.getState().analysisSucceeded(analysis);
-        // Only here. A superseded, failed or aborted run must not publish a
-        // link claiming to reproduce a result it never produced. The `scope`
-        // and `oligos` written are the ones this run used, not whatever the
-        // store holds by the time it lands.
-        publishPermalink(scope, oligos);
-      })
-      .catch((err: unknown) => {
-        if (controller.signal.aborted) return;
-        useAppStore.getState().analysisFailed(messageOf(err));
-      });
-  }, [transport]);
-
-  useEffect(
-    () => () => {
-      runRef.current?.abort();
-    },
-    [],
-  );
+  const start = useAnalysisRunner(transport);
 
   /**
    * The link the page was opened with, read once and never again.
@@ -384,38 +99,7 @@ export default function App() {
     start();
   }, [restored, start]);
 
-  const runWorkedExample = () => {
-    const store = useAppStore.getState();
-    // Resets everything, including a pathogen the user had picked: the bundled
-    // assay is meaningless against any other reference.
-    store.setPathogen(WORKED_EXAMPLE.pathogenId);
-    const oligos = WORKED_EXAMPLE.oligos.map((oligo, index) => ({
-      id: `oligo-${index}`,
-      name: oligo.name,
-      role: oligo.role,
-      sequence: oligo.sequence,
-    }));
-    useAppStore.getState().setOligos(oligos);
-
-    const reference = loadReference(WORKED_EXAMPLE.pathogenId);
-    const sites: Record<string, BindingSite> = {};
-    for (const oligo of oligos) {
-      const resolution = resolveBindingSite(oligo.sequence, reference);
-      useAppStore.getState().setResolution(oligo.id, resolution);
-      if (resolution.chosen === null) {
-        // Should be unreachable: the verification gate re-resolves every
-        // library oligo in CI. Showing step 2 is the honest fallback -- it
-        // says exactly which oligo could not be placed, rather than running an
-        // analysis over a partial assay.
-        useAppStore.getState().goTo('binding');
-        return;
-      }
-      sites[oligo.id] = resolution.chosen;
-    }
-    useAppStore.getState().commitSites(sites);
-    useAppStore.getState().setScope({ dateFrom: WORKED_EXAMPLE_DATE_FROM });
-    start();
-  };
+  const runWorkedExample = () => { if (prepareWorkedExample()) start(); };
 
   const cfg = getPathogen(pathogenId);
 
