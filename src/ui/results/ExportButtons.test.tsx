@@ -57,8 +57,16 @@ afterEach(() => {
 });
 
 describe('ExportButtons', () => {
-  it('offers both CSVs, the JSON and the methods paragraph', () => {
+  it('keeps copying the link visible and discloses the four export actions', async () => {
+    const user = userEvent.setup();
     render(<ExportButtons result={result} />);
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
+    expect(screen.getByText('Export files and methods').closest('details')).not.toHaveAttribute('open');
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Copy link' })).toHaveFocus();
+    screen.getByText('Export files and methods').focus();
+    expect(screen.getByText('Export files and methods')).toHaveFocus();
+    await user.keyboard('{Enter}');
     expect(screen.getByRole('button', { name: SUMMARY_BUTTON })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: POSITION_BUTTON })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Download JSON' })).toBeInTheDocument();
@@ -139,8 +147,8 @@ describe('ExportButtons', () => {
 describe('ExportButtons — copying the methods paragraph', () => {
   it('mounts the live region before there is anything to announce', () => {
     render(<ExportButtons result={result} />);
-    expect(screen.getByRole('status')).toBeInTheDocument();
-    expect(screen.getByRole('status').textContent).toBe('');
+    expect(screen.getByRole('status', { name: 'Methods copy status' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Methods copy status' }).textContent).toBe('');
   });
 
   it('copies the paragraph and says so', async () => {
@@ -170,6 +178,6 @@ describe('ExportButtons — copying the methods paragraph', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Copy methods paragraph' }));
     });
 
-    expect(screen.getByRole('status')).toHaveTextContent(/could not reach the clipboard/i);
+    expect(screen.getByRole('status', { name: 'Methods copy status' })).toHaveTextContent(/could not reach the clipboard/i);
   });
 });

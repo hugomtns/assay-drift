@@ -153,8 +153,16 @@ describe('ResultsPanel', () => {
     expect(container.querySelector('details')).not.toHaveAttribute('open');
   });
 
-  it('offers the exports and the methods paragraph, once for the whole result', () => {
+  it('groups sharing and export after the assay summary', async () => {
+    const user = userEvent.setup();
     render(<ResultsPanel result={result()} />);
+    const summary = screen.getByRole('table', { name: 'Assay summary' });
+    const sharing = screen.getByRole('heading', { name: 'Share and export' }).closest('section');
+    expect(sharing).not.toBeNull();
+    expect(summary.compareDocumentPosition(sharing!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(sharing!).getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
+    expect(within(sharing!).getByText('Export files and methods').closest('details')).not.toHaveAttribute('open');
+    await user.click(within(sharing!).getByText('Export files and methods'));
     expect(
       screen.getAllByRole('button', { name: /^Download CSV/ }).map((b) => b.textContent),
     ).toEqual(['Download CSV — one row per oligo', 'Download CSV — one row per position']);
@@ -162,8 +170,12 @@ describe('ResultsPanel', () => {
     expect(screen.getByRole('button', { name: 'Copy methods paragraph' })).toBeInTheDocument();
   });
 
-  it('states which snapshot of the data the numbers came from', () => {
+  it('keeps machine-readable provenance inside Run details', () => {
     render(<ResultsPanel result={result()} />);
+    const details = screen.getByText('Run details').closest('details');
+    expect(details).not.toHaveAttribute('open');
+    expect(details).toHaveTextContent(/15 queries/);
+    expect(screen.getByText(/^Scope:/)).toHaveTextContent(/71,142 SARS-CoV-2 sequences/);
     expect(screen.getByText(/1719792000/)).toBeInTheDocument();
   });
 

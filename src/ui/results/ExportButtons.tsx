@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { AnalysisResult } from '../../core/analysis/run';
 import { toJsonExport, toPositionCsv, toSummaryCsv } from '../../core/export/csv';
 import { methodsParagraph } from '../../core/export/methods';
+import { PERMALINK_PREFIX } from '../../core/permalink';
 
 /**
  * A UTF-8 byte-order mark, on the CSVs only.
@@ -39,6 +40,8 @@ function downloadFile(filename: string, mimeType: string, contents: string): voi
 
 type CopyState = 'idle' | 'copied' | 'failed';
 
+type LinkCopyState = 'idle' | 'copied' | 'unavailable' | 'failed';
+
 const COPY_MESSAGES: Readonly<Record<CopyState, string>> = Object.freeze({
   idle: '',
   copied: 'Methods paragraph copied.',
@@ -46,8 +49,48 @@ const COPY_MESSAGES: Readonly<Record<CopyState, string>> = Object.freeze({
     'Could not reach the clipboard. Download the JSON instead — it carries the same methods paragraph.',
 });
 
+const LINK_COPY_MESSAGES: Readonly<Record<LinkCopyState, string>> = Object.freeze({
+  idle: '',
+  copied: 'Link copied.',
+  unavailable:
+    'This analysis is too large to put in a link, so there is nothing to copy. Narrow the scope or run fewer oligos at once.',
+  failed: 'Could not reach the clipboard. The link is in the address bar and can be copied from there.',
+});
+
 interface ExportButtonsProps {
   result: AnalysisResult;
+}
+
+/** Copies the permalink at the instant it is requested, after a run has published it. */
+export function CopyLinkButton() {
+  const [state, setState] = useState<LinkCopyState>('idle');
+
+  const copy = (): void => {
+    if (!window.location.hash.startsWith(PERMALINK_PREFIX)) {
+      setState('unavailable');
+      return;
+    }
+    const clipboard: Clipboard | undefined = navigator.clipboard;
+    if (clipboard === undefined) {
+      setState('failed');
+      return;
+    }
+    clipboard.writeText(window.location.href).then(
+      () => { setState('copied'); },
+      () => { setState('failed'); },
+    );
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <button type="button" onClick={copy} className="rounded border border-slate-900 px-3 py-1 text-sm text-slate-900">
+        Copy link
+      </button>
+      <span role="status" aria-label="Link copy status" className="text-sm text-slate-600">
+        {LINK_COPY_MESSAGES[state]}
+      </span>
+    </div>
+  );
 }
 
 /**
@@ -92,14 +135,11 @@ export function ExportButtons({ result }: ExportButtonsProps) {
 
   return (
     <section aria-labelledby="export-heading" className="flex flex-col gap-2">
-      <h3 id="export-heading" className="text-base font-semibold">
-        Take this away with you
-      </h3>
-      <p className="text-sm text-slate-700">
-        Every file opens with a comment block carrying the unit of analysis, the data version and
-        the scope, so a number lifted out of it can still be traced back.
-      </p>
-      <div className="flex flex-wrap items-center gap-3">
+      <h3 id="export-heading" className="text-base font-semibold">Share and export</h3>
+      <CopyLinkButton />
+      <details className="text-sm text-slate-700">
+        <summary className="cursor-pointer font-medium text-slate-900">Export files and methods</summary>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
         <button
           type="button"
           className={buttonClass}
@@ -131,14 +171,14 @@ export function ExportButtons({ result }: ExportButtonsProps) {
           Copy methods paragraph
         </button>
         {/*
-          Always mounted with its text swapped in, exactly as CopyLinkButton in
-          App.tsx does it: a live region inserted at the same instant as its
-          text is frequently never announced.
+          Always mounted with its text swapped in: a live region inserted at
+          the same instant as its text is frequently never announced.
         */}
-        <span role="status" className="text-sm text-slate-600">
+        <span role="status" aria-label="Methods copy status" className="text-sm text-slate-600">
           {COPY_MESSAGES[copyState]}
         </span>
-      </div>
+        </div>
+      </details>
     </section>
   );
 }

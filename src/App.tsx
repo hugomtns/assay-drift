@@ -35,6 +35,7 @@ import { ErrorState } from './ui/common/ErrorState';
 import { Loading } from './ui/common/Loading';
 import { AssayPicker } from './ui/input/AssayPicker';
 import { OligoInputPanel } from './ui/input/OligoInputPanel';
+import { CopyLinkButton } from './ui/results/ExportButtons';
 import { ResultsPanel } from './ui/results/ResultsPanel';
 import { ScopeControls } from './ui/scope/ScopeControls';
 
@@ -180,64 +181,6 @@ function publishPermalink(scope: Scope, oligos: AnalysisOligo[]): void {
     // at click time, so it says so rather than copying a URL that lies.
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
   }
-}
-
-type CopyState = 'idle' | 'copied' | 'unavailable' | 'failed';
-
-const COPY_MESSAGES: Readonly<Record<CopyState, string>> = Object.freeze({
-  idle: '',
-  copied: 'Link copied.',
-  unavailable:
-    'This analysis is too large to put in a link, so there is nothing to copy. Narrow the scope or run fewer oligos at once.',
-  failed: 'Could not reach the clipboard. The link is in the address bar and can be copied from there.',
-});
-
-/**
- * Copies the current URL, which is the permalink, and says what happened.
- *
- * The hash is read at click time rather than at render time on purpose: it is
- * written by `publishPermalink` outside React, so a value captured during
- * render could be a frame behind, and the one case that matters -- no link,
- * because the query would not fit -- is precisely the one where copying the
- * URL anyway would hand someone a link to the empty app.
- */
-function CopyLinkButton() {
-  const [state, setState] = useState<CopyState>('idle');
-
-  const copy = (): void => {
-    if (!window.location.hash.startsWith(PERMALINK_PREFIX)) {
-      setState('unavailable');
-      return;
-    }
-    const clipboard: Clipboard | undefined = navigator.clipboard;
-    if (clipboard === undefined) {
-      setState('failed');
-      return;
-    }
-    clipboard.writeText(window.location.href).then(
-      () => { setState('copied'); },
-      () => { setState('failed'); },
-    );
-  };
-
-  return (
-    <div className="flex flex-wrap items-center gap-3">
-      <button
-        type="button"
-        onClick={copy}
-        className="rounded border border-slate-900 px-3 py-1 text-sm text-slate-900"
-      >
-        Copy link to this analysis
-      </button>
-      {/*
-        Always mounted with its text swapped in: a live region inserted at the
-        same instant as its text is frequently never announced.
-      */}
-      <span role="status" className="text-sm text-slate-600">
-        {COPY_MESSAGES[state]}
-      </span>
-    </div>
-  );
 }
 
 interface PathogenSelectorProps {
@@ -590,7 +533,6 @@ export default function App() {
   } else {
     content = (
       <div className="flex flex-col gap-6">
-        <CopyLinkButton />
         {/*
           The same session transport the analysis ran on, so the opt-in
           exact-coverage fan-out shares its cache and its in-flight

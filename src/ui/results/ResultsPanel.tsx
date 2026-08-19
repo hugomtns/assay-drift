@@ -172,6 +172,8 @@ export function ResultsPanel({ result, transport }: ResultsPanelProps) {
 
       <p className="text-xs text-slate-600">{UNIT_OF_ANALYSIS}</p>
 
+      <ExportButtons result={result} />
+
       <p className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
         Sampled sequences are not infections. Sequences with ambiguous bases at this site are excluded from rates. An in-silico mismatch is not assay failure.
       </p>
@@ -187,10 +189,15 @@ export function ResultsPanel({ result, transport }: ResultsPanelProps) {
       <CaveatPanel result={result} />
 
       <p className="text-sm text-slate-700">
-        {`${formatCount(result.nScope)} ${cfg.label} sequences match this scope, collected ${result.scope.dateFrom} to ${result.scope.dateTo} inclusive. Data version ${result.dataVersion}, read ${result.generatedAt}, over ${formatCount(result.queryCount)} queries.`}
+        {`Scope: ${formatCount(result.nScope)} ${cfg.label} sequences, collected ${result.scope.dateFrom} to ${result.scope.dateTo} inclusive.`}
       </p>
 
-      <ExportButtons result={result} />
+      <details className="text-sm text-slate-700">
+        <summary className="cursor-pointer font-medium text-slate-900">Run details</summary>
+        <p className="mt-2">
+          {`Data version ${result.dataVersion}. Read ${result.generatedAt}. ${formatCount(result.queryCount)} queries.`}
+        </p>
+      </details>
 
       {result.oligos.map((oligo) => (
         <OligoResult
