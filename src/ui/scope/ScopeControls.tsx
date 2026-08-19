@@ -1,11 +1,9 @@
-import { useEffect, useState, type ChangeEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { queryAggregated, type AggregatedRow } from '../../core/lapis/endpoints';
 import type { LapisTransport } from '../../core/lapis/transport';
 import { getPathogen, type PathogenId } from '../../core/registry';
 import { useAppStore } from '../../state/store';
 
-/** Rows on screen at once for each multi-select. Enough to scan, short enough to scroll past. */
-const SELECT_ROWS = 8;
 
 /**
  * Ids of the three message regions. Every one is *always* mounted with its
@@ -17,6 +15,44 @@ const SELECT_ROWS = 8;
 const DATE_RANGE_MESSAGE_ID = 'scope-date-range-message';
 const DATE_MISSING_MESSAGE_ID = 'scope-date-missing-message';
 const OPTIONS_MESSAGE_ID = 'scope-options-message';
+
+interface FilterListProps {
+  label: string;
+  values: readonly string[];
+  selected: readonly string[];
+  unmatched: readonly string[];
+  onChange: (values: string[]) => void;
+}
+
+function FilterList({ label, values, selected, unmatched, onChange }: FilterListProps) {
+  const [query, setQuery] = useState('');
+  const visible = values.filter((value) => value.toLowerCase().includes(query.toLowerCase()));
+  const toggle = (value: string) =>
+    onChange(selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value]);
+
+  return (
+    <fieldset className="flex min-w-56 flex-col gap-2">
+      <legend className="text-sm font-medium text-slate-900">{label}</legend>
+      <label className="sr-only" htmlFor={`scope-filter-${label}`}>{`Filter ${label}`}</label>
+      <input
+        id={`scope-filter-${label}`}
+        type="search"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder={`Filter ${label}`}
+        className="rounded border border-slate-300 px-2 py-1 text-sm"
+      />
+      <div className="max-h-52 overflow-y-auto rounded border border-slate-300 p-2">
+        {[...visible, ...unmatched].map((value) => (
+          <label key={value} className="flex items-center gap-2 py-1 text-sm">
+            <input type="checkbox" checked={selected.includes(value)} onChange={() => toggle(value)} />
+            {value}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
 
 /**
  * The outcome of one option-list load, stamped with the *inputs that produced
@@ -82,7 +118,6 @@ function optionValues(rows: AggregatedRow[], field: string): string[] {
 }
 
 /** The optgroup a selected value sits in when the dataset does not have it. */
-const NOT_IN_DATASET_LABEL = 'Not in this dataset';
 
 interface MergedOptions {
   /** Rendered plainly, in the order the load returned them. */
@@ -296,11 +331,6 @@ export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
       ? DATE_RANGE_MESSAGE_ID
       : undefined;
 
-  const selectedValues = (event: ChangeEvent<HTMLSelectElement>): string[] =>
-    Array.from(event.target.selectedOptions, (option) => option.value);
-
-  const lineagePlural = `${cfg.lineageLabel}s`;
-
   // `cfg.lineageLabel` is used verbatim, never lower-cased: "HA clade" is an
   // acronym plus a word, and `toLowerCase()` turned it into "ha clade".
   const listNames = `country and ${cfg.lineageLabel}`;
@@ -387,74 +417,13 @@ export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
         {missingDate ? 'Enter both a start and an end collection date.' : ''}
       </p>
 
-      <div className="flex flex-wrap gap-4">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="scope-countries" className="text-sm font-medium text-slate-900">
-            Country
-          </label>
-          <select
-            id="scope-countries"
-            multiple
-            size={SELECT_ROWS}
-            aria-describedby="scope-countries-hint"
-            value={scope.countries}
-            onChange={(e) => setScope({ countries: selectedValues(e) })}
-            className="min-w-56 rounded border border-slate-300 px-2 py-1"
-          >
-            {countryOptions.options.map((country) => (
-              <option key={country} value={country}>
-                {country}
-              </option>
-            ))}
-            {countryOptions.unmatched.length > 0 && (
-              <optgroup label={NOT_IN_DATASET_LABEL}>
-                {countryOptions.unmatched.map((country) => (
-                  <option key={country} value={country}>
-                    {country}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-          </select>
-          <p id="scope-countries-hint" className="text-xs text-slate-600">
-            Leave empty to include all countries. This list covers the whole dataset, not just your
-            date range.
-          </p>
+      <details open={scope.countries.length > 0 || scope.lineages.length > 0}>
+        <summary className="cursor-pointer text-sm font-medium text-slate-900">Add filters</summary>
+        <div className="mt-3 flex flex-wrap gap-4">
+          <FilterList label="Country" values={countryOptions.options} unmatched={countryOptions.unmatched} selected={scope.countries} onChange={(countries) => setScope({ countries })} />
+          <FilterList label={cfg.lineageLabel} values={lineageOptions.options} unmatched={lineageOptions.unmatched} selected={scope.lineages} onChange={(lineages) => setScope({ lineages })} />
         </div>
-
-        <div className="flex flex-col gap-1">
-          <label htmlFor="scope-lineages" className="text-sm font-medium text-slate-900">
-            {cfg.lineageLabel}
-          </label>
-          <select
-            id="scope-lineages"
-            multiple
-            size={SELECT_ROWS}
-            aria-describedby="scope-lineages-hint"
-            value={scope.lineages}
-            onChange={(e) => setScope({ lineages: selectedValues(e) })}
-            className="min-w-56 rounded border border-slate-300 px-2 py-1"
-          >
-            {lineageOptions.options.map((lineage) => (
-              <option key={lineage} value={lineage}>
-                {lineage}
-              </option>
-            ))}
-            {lineageOptions.unmatched.length > 0 && (
-              <optgroup label={NOT_IN_DATASET_LABEL}>
-                {lineageOptions.unmatched.map((lineage) => (
-                  <option key={lineage} value={lineage}>
-                    {lineage}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-          </select>
-          <p id="scope-lineages-hint" className="text-xs text-slate-600">
-            {`Leave empty to include all ${lineagePlural}. This list covers the whole dataset, not just your date range.`}
-          </p>
-        </div>
-      </div>
+      </details>
 
       {/*
         Always mounted, text swapped in. A `role="status"` node inserted at the
