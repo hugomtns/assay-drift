@@ -33,5 +33,6 @@
     "vitest.live.config.ts",
     "scripts/**/*.ts",
     "tests/**/*.ts"
-  ]
+  ],
+  "exclude": ["tests/e2e/**"]
 }
