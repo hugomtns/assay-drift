@@ -24,6 +24,37 @@ interface FilterListProps {
   onChange: (values: string[]) => void;
 }
 
+interface SelectedFiltersProps {
+  label: string;
+  values: readonly string[];
+  unmatched: readonly string[];
+  onRemove: (value: string) => void;
+}
+
+function SelectedFilters({ label, values, unmatched, onRemove }: SelectedFiltersProps) {
+  if (values.length === 0) return null;
+
+  return (
+    <ul aria-label={`Selected ${label} filters`} className="flex flex-wrap gap-2">
+      {values.map((value) => {
+        const unavailable = unmatched.includes(value);
+        return (
+          <li key={value}>
+            <button
+              type="button"
+              onClick={() => onRemove(value)}
+              className="rounded border border-slate-300 bg-slate-50 px-2 py-1 text-sm text-slate-800"
+              aria-label={`Remove ${label} filter ${value}${unavailable ? ', not in the loaded dataset' : ''}`}
+            >
+              {`${label}: ${value} \u00d7`}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function FilterList({ label, values, selected, unmatched, onChange }: FilterListProps) {
   const [query, setQuery] = useState('');
   const visible = values.filter((value) => value.toLowerCase().includes(query.toLowerCase()));
@@ -416,6 +447,24 @@ export function ScopeControls({ onRun, transport }: ScopeControlsProps) {
       >
         {missingDate ? 'Enter both a start and an end collection date.' : ''}
       </p>
+
+      {(scope.countries.length > 0 || scope.lineages.length > 0) && (
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium text-slate-900">Selected filters</p>
+          <SelectedFilters
+            label="Country"
+            values={scope.countries}
+            unmatched={countryOptions.unmatched}
+            onRemove={(country) => setScope({ countries: scope.countries.filter((item) => item !== country) })}
+          />
+          <SelectedFilters
+            label={cfg.lineageLabel}
+            values={scope.lineages}
+            unmatched={lineageOptions.unmatched}
+            onRemove={(lineage) => setScope({ lineages: scope.lineages.filter((item) => item !== lineage) })}
+          />
+        </div>
+      )}
 
       <details open={scope.countries.length > 0 || scope.lineages.length > 0}>
         <summary className="cursor-pointer text-sm font-medium text-slate-900">Add filters</summary>

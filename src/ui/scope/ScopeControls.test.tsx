@@ -59,9 +59,10 @@ describe('ScopeControls', () => {
     expectBlocked(screen.getByRole('button', { name: /run analysis/i }));
   });
 
-  it('states that an empty filter means all', () => {
+  it('keeps optional filters collapsed until a selection is made', () => {
     render(<ScopeControls onRun={vi.fn()} />);
-    expect(screen.getAllByText(/all countries|all lineages|all clades/i).length).toBeGreaterThan(0);
+    expect(screen.getByText('Add filters').closest('details')).not.toHaveAttribute('open');
+    expect(screen.queryByText('Selected filters')).toBeNull();
   });
 
   it('labels the lineage control with the pathogen-specific term', () => {
@@ -157,22 +158,22 @@ describe('ScopeControls option lists', () => {
     const spy = vi.spyOn(globalThis, 'fetch');
     render(<ScopeControls onRun={vi.fn()} />);
     expect(spy).not.toHaveBeenCalled();
-    expect(within(screen.getByLabelText(/country/i)).queryAllByRole('option')).toEqual([]);
+    expect(screen.getByRole('group', { name: 'Country' }).querySelectorAll('input[type="checkbox"]')).toHaveLength(0);
     spy.mockRestore();
   });
 
-  it('fills both selects from one query per field, sorted and de-duplicated', async () => {
+  it('fills both checkbox lists from one query per field, sorted and de-duplicated', async () => {
     const { transport, signals } = optionTransport({
       country: ['Germany', 'Denmark', 'Germany'],
       pangoLineage: ['BA.2', 'BA.1'],
     });
     render(<ScopeControls onRun={vi.fn()} transport={transport} />);
 
-    await screen.findByRole('option', { name: 'Denmark' });
-    const countries = within(screen.getByLabelText(/country/i)).getAllByRole('option');
-    expect(countries.map((o) => o.textContent)).toEqual(['Denmark', 'Germany']);
-    const lineages = within(screen.getByLabelText(/pango lineage/i)).getAllByRole('option');
-    expect(lineages.map((o) => o.textContent)).toEqual(['BA.1', 'BA.2']);
+    await screen.findByRole('checkbox', { name: 'Denmark' });
+    const countries = within(screen.getByRole('group', { name: 'Country' })).getAllByRole('checkbox');
+    expect(countries.map((checkbox) => checkbox.getAttribute('aria-label') ?? checkbox.parentElement?.textContent)).toEqual(['Denmark', 'Germany']);
+    const lineages = within(screen.getByRole('group', { name: 'Pango lineage' })).getAllByRole('checkbox');
+    expect(lineages.map((checkbox) => checkbox.getAttribute('aria-label') ?? checkbox.parentElement?.textContent)).toEqual(['BA.1', 'BA.2']);
     expect(signals).toHaveLength(2);
   });
 
@@ -180,8 +181,8 @@ describe('ScopeControls option lists', () => {
     const { transport } = optionTransport({ country: ['Denmark', 'Germany'] });
     render(<ScopeControls onRun={vi.fn()} transport={transport} />);
 
-    await screen.findByRole('option', { name: 'Germany' });
-    await userEvent.selectOptions(screen.getByLabelText(/country/i), ['Germany']);
+    await screen.findByRole('checkbox', { name: 'Germany' });
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Germany' }));
     expect(useAppStore.getState().scope.countries).toEqual(['Germany']);
   });
 
@@ -300,7 +301,7 @@ describe('ScopeControls option lists', () => {
     const second = pendingTransport();
     const { rerender } = render(<ScopeControls onRun={vi.fn()} transport={first.transport} />);
 
-    await screen.findByRole('option', { name: 'Germany' });
+    await screen.findByRole('checkbox', { name: 'Germany' });
 
     rerender(<ScopeControls onRun={vi.fn()} transport={second.transport} />);
 
@@ -309,8 +310,8 @@ describe('ScopeControls option lists', () => {
     expect(second.signals).toHaveLength(2);
     expect(screen.getByText(/loading the country and Pango lineage lists/i)).toBeInTheDocument();
     // And the stale list is no longer offered as a choice the user can make.
-    expect(screen.queryByRole('option', { name: 'Germany' })).not.toBeInTheDocument();
-    expect(within(screen.getByLabelText(/country/i)).queryAllByRole('option')).toEqual([]);
+    expect(screen.queryByRole('checkbox', { name: 'Germany' })).not.toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Country' }).querySelectorAll('input[type="checkbox"]')).toHaveLength(0);
   });
 
   it('survives a failed option load with the step still runnable', async () => {
@@ -333,32 +334,28 @@ describe('ScopeControls option lists', () => {
 // Germany. The UI claimed the analysis was unfiltered at the exact moment it
 // was filtered, and nothing failed loudly.
 describe('ScopeControls with a selection the option list does not contain', () => {
-  it('keeps the selection visible and selected when no options have loaded', () => {
+  it('keeps selected filters visible and removable when no options have loaded', async () => {
     useAppStore.getState().setScope({ countries: ['Germany'], lineages: ['BA.2'] });
     render(<ScopeControls onRun={vi.fn()} />);
 
-    const countries = within(screen.getByLabelText(/country/i)).getAllByRole('option');
-    expect(countries.map((o) => o.textContent)).toEqual(['Germany']);
-    expect((countries[0] as HTMLOptionElement).selected).toBe(true);
-
-    const lineages = within(screen.getByLabelText(/pango lineage/i)).getAllByRole('option');
-    expect(lineages.map((o) => o.textContent)).toEqual(['BA.2']);
-    expect((lineages[0] as HTMLOptionElement).selected).toBe(true);
-
-    // Still filtering, and now saying so.
+    expect(screen.getByRole('button', { name: 'Remove Country filter Germany' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove Pango lineage filter BA.2' })).toBeInTheDocument();
     expect(useAppStore.getState().scope.countries).toEqual(['Germany']);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Country filter Germany' }));
+    expect(useAppStore.getState().scope.countries).toEqual([]);
   });
 
-  it('merges a selection into a loaded list without duplicating or unsorting it', async () => {
+  it('merges selected values into a loaded list without duplicating or unsorting them', async () => {
     useAppStore.getState().setScope({ countries: ['Denmark', 'Norway'] });
     const { transport } = optionTransport({ country: ['Germany', 'Denmark'] });
     render(<ScopeControls onRun={vi.fn()} transport={transport} />);
 
-    await screen.findByRole('option', { name: 'Germany' });
-    const countries = within(screen.getByLabelText(/country/i)).getAllByRole('option');
-    expect(countries.map((o) => o.textContent)).toEqual(['Denmark', 'Germany', 'Norway']);
-    const selected = countries.filter((o) => (o as HTMLOptionElement).selected);
-    expect(selected.map((o) => o.textContent)).toEqual(['Denmark', 'Norway']);
+    await screen.findByRole('checkbox', { name: 'Germany' });
+    const countries = within(screen.getByRole('group', { name: 'Country' })).getAllByRole('checkbox');
+    expect(countries.map((checkbox) => checkbox.parentElement?.textContent)).toEqual(['Denmark', 'Germany', 'Norway']);
+    expect(screen.getByRole('checkbox', { name: 'Denmark' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Norway' })).toBeChecked();
   });
 
   it('names the filters it is still applying when the option lists fail to load', async () => {
@@ -384,23 +381,14 @@ describe('ScopeControls with a selection the option list does not contain', () =
 // from one it does. It must NOT be accused when nothing has loaded, because
 // then there is no evidence either way.
 describe('ScopeControls with a filter value the dataset does not contain', () => {
-  it('separates a value the loaded list does not contain from one it does', async () => {
+  it('marks a selected value the loaded list does not contain', async () => {
     useAppStore.getState().setScope({ countries: ['germany'] });
     const { transport } = optionTransport({ country: ['Denmark', 'Germany'] });
     render(<ScopeControls onRun={vi.fn()} transport={transport} />);
 
-    await screen.findByRole('option', { name: 'Germany' });
-    const select = screen.getByLabelText(/country/i);
-    const real = within(select).getByRole('option', { name: 'Germany' });
-    const lookalike = within(select).getByRole('option', { name: 'germany' });
-
-    expect(real.closest('optgroup')).toBeNull();
-    expect(lookalike.closest('optgroup')).toHaveAttribute(
-      'label',
-      expect.stringMatching(/not in this dataset/i),
-    );
-    // Still selected, and still filtering: this marks it, it does not drop it.
-    expect((lookalike as HTMLOptionElement).selected).toBe(true);
+    await screen.findByRole('checkbox', { name: 'Germany' });
+    expect(screen.getByRole('checkbox', { name: 'germany' })).toBeChecked();
+    expect(screen.getByRole('button', { name: /Remove Country filter germany, not in the loaded dataset/ })).toBeInTheDocument();
     expect(useAppStore.getState().scope.countries).toEqual(['germany']);
   });
 
@@ -422,12 +410,11 @@ describe('ScopeControls with a filter value the dataset does not contain', () =>
     const { transport } = pendingTransport();
     render(<ScopeControls onRun={vi.fn()} transport={transport} />);
 
-    expect(screen.queryByText(/not in this dataset/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /not in the loaded dataset/i })).toBeNull();
     expect(screen.getByText(/loading the country and Pango lineage lists/i)).toBeInTheDocument();
     expect(
-      within(screen.getByLabelText(/country/i)).getByRole('option', { name: 'germany' })
-        .closest('optgroup'),
-    ).toBeNull();
+      screen.getByRole('checkbox', { name: 'germany' }),
+    ).toBeChecked();
   });
 
   it('says nothing when the lists failed to load', async () => {
@@ -438,10 +425,7 @@ describe('ScopeControls with a filter value the dataset does not contain', () =>
     const notice = await screen.findByText(/could not be loaded/i);
     expect(notice).toHaveTextContent('germany');
     expect(notice).not.toHaveTextContent(/not in this dataset/i);
-    expect(
-      within(screen.getByLabelText(/country/i)).getByRole('option', { name: 'germany' })
-        .closest('optgroup'),
-    ).toBeNull();
+    expect(screen.getByRole('checkbox', { name: 'germany' })).toBeChecked();
   });
 });
 
