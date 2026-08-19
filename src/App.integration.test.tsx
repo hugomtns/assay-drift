@@ -40,6 +40,7 @@ describe('App', () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole('tab', { name: /paste my own oligos/i }));
     await user.click(screen.getByLabelText(/paste your oligos/i));
     await user.paste('>N1-F\nTACATGTCTCTGGGACCAATGG');
     await user.click(await screen.findByRole('button', { name: /continue/i }));

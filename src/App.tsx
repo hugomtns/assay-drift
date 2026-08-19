@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { runAnalysis, type AnalysisOligo } from './core/analysis/run';
 import { findBindingSites, type BindingSite } from './core/binding';
 import { withCache } from './core/lapis/caching-transport';
@@ -321,6 +329,7 @@ function PathogenSelector({ value, hasAnalysisInputs, onChange }: PathogenSelect
  * with an older answer.
  */
 export default function App() {
+  const [entryPath, setEntryPath] = useState<'published' | 'paste'>('published');
   const step = useAppStore((s) => s.step);
   const status = useAppStore((s) => s.status);
   const error = useAppStore((s) => s.error);
@@ -467,6 +476,27 @@ export default function App() {
 
   const cfg = getPathogen(pathogenId);
 
+  const handleEntryTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const tabs = Array.from(
+      event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? [],
+    );
+    const currentIndex = tabs.indexOf(event.currentTarget);
+    if (currentIndex < 0) return;
+
+    let nextIndex: number | null = null;
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
+    if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = tabs.length - 1;
+    if (nextIndex === null) return;
+
+    event.preventDefault();
+    const next = tabs[nextIndex];
+    if (next === undefined) return;
+    setEntryPath(next.id === 'published-assay-tab' ? 'published' : 'paste');
+    next.focus();
+  };
+
   let content: ReactNode;
   if (status === 'loading') {
     content = (
@@ -488,20 +518,50 @@ export default function App() {
             again.
           </p>
         )}
-        <OligoInputPanel />
-        <section aria-labelledby="worked-example-heading" className="flex flex-col items-start gap-2">
-          <h2 id="worked-example-heading" className="text-base font-semibold">
-            Or start from a worked example
+        <section aria-labelledby="entry-path-heading" className="flex flex-col gap-4">
+          <h2 id="entry-path-heading" className="text-xl font-semibold">
+            Start an assay check
           </h2>
-          <button
-            type="button"
-            onClick={runWorkedExample}
-            className="rounded border border-slate-900 px-4 py-2 text-slate-900"
-          >
-            See how the CDC N1 assay has drifted since 2020
-          </button>
+          <div role="tablist" aria-label="Choose how to start" className="flex flex-wrap gap-2 border-b border-slate-200">
+            <button
+              id="published-assay-tab"
+              type="button"
+              role="tab"
+              aria-selected={entryPath === 'published'}
+              aria-controls="published-assay-panel"
+              onClick={() => { setEntryPath('published'); }}
+              onKeyDown={handleEntryTabKeyDown}
+              className={`border-b-2 px-3 py-2 text-sm font-medium ${
+                entryPath === 'published' ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-600'
+              }`}
+            >
+              Choose a published assay
+            </button>
+            <button
+              id="paste-oligos-tab"
+              type="button"
+              role="tab"
+              aria-selected={entryPath === 'paste'}
+              aria-controls="paste-oligos-panel"
+              onClick={() => { setEntryPath('paste'); }}
+              onKeyDown={handleEntryTabKeyDown}
+              className={`border-b-2 px-3 py-2 text-sm font-medium ${
+                entryPath === 'paste' ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-600'
+              }`}
+            >
+              Paste my own oligos
+            </button>
+          </div>
+          {entryPath === 'published' ? (
+            <div id="published-assay-panel" role="tabpanel" aria-labelledby="published-assay-tab">
+              <AssayPicker onRunExample={runWorkedExample} />
+            </div>
+          ) : (
+            <div id="paste-oligos-panel" role="tabpanel" aria-labelledby="paste-oligos-tab">
+              <OligoInputPanel />
+            </div>
+          )}
         </section>
-        <AssayPicker />
       </div>
     );
   } else if (step === 'binding') {

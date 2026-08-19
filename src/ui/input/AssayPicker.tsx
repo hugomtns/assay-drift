@@ -54,7 +54,11 @@ function shortSource(source: string): string {
  * oligos in the store would mean one keystroke in the textarea silently replaces
  * them. Navigating away closes that window.
  */
-export function AssayPicker() {
+interface AssayPickerProps {
+  onRunExample?: () => void;
+}
+
+export function AssayPicker({ onRunExample }: AssayPickerProps) {
   const setPathogen = useAppStore((s) => s.setPathogen);
   const setOligos = useAppStore((s) => s.setOligos);
   const goTo = useAppStore((s) => s.goTo);
@@ -79,58 +83,77 @@ export function AssayPicker() {
     <section aria-labelledby="assay-picker-heading" className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         <h2 id="assay-picker-heading" className="text-base font-semibold">
-          Or choose a published assay
+          Published assays
         </h2>
         <p className="text-sm text-slate-600">
-          Every sequence below was transcribed from the cited document and checked against the
-          bundled reference genome. Choosing one fills in the oligos with their roles already set.
+          Choose a checked assay, with roles already assigned.
         </p>
       </div>
 
-      {PATHOGEN_ORDER.map((pathogenId) => {
-        const assays = LIBRARY.assays.filter((assay) => assay.pathogenId === pathogenId);
-        if (assays.length === 0) return null;
-        const cfg = PATHOGENS[pathogenId];
-        const headingId = `assay-picker-${pathogenId}`;
-
-        return (
-          <div key={pathogenId} className="flex flex-col gap-2">
-            <h3 id={headingId} className="text-sm font-semibold text-slate-900">
-              {cfg.label}
-            </h3>
-            <ul aria-labelledby={headingId} className="flex flex-col gap-2">
-              {assays.map((assay) => (
-                <li
-                  key={assay.id}
-                  className="flex flex-col items-start gap-1 rounded border border-slate-300 p-3"
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      select(assay);
-                    }}
-                    className="text-left font-medium text-slate-900 underline"
-                  >
-                    {assay.name}
-                  </button>
-                  <p className="text-sm text-slate-700">
-                    {assay.target} &middot; {assay.oligos.length} oligos
-                  </p>
-                  <a
-                    href={assay.citation.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    title={assay.citation.title}
-                    className="text-sm text-slate-700 underline"
-                  >
-                    {`Source: ${shortSource(assay.citation.source)}`}
-                  </a>
-                </li>
-              ))}
-            </ul>
+      {onRunExample !== undefined && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-y border-slate-200 py-3">
+          <div>
+            <p className="text-sm font-medium text-slate-900">Recommended example</p>
+            <p className="text-sm text-slate-600">CDC N1 assay, scoped from 2020.</p>
           </div>
-        );
-      })}
+          <button
+            type="button"
+            onClick={onRunExample}
+            className="rounded border border-slate-900 px-3 py-2 text-sm text-slate-900"
+          >
+            See how the CDC N1 assay has drifted since 2020
+          </button>
+        </div>
+      )}
+
+      <details>
+        <summary className="cursor-pointer text-sm font-medium text-slate-900 underline underline-offset-4">
+          Browse published assays
+        </summary>
+        <div className="mt-4 flex flex-col gap-4">
+          {PATHOGEN_ORDER.map((pathogenId) => {
+            const assays = LIBRARY.assays.filter((assay) => assay.pathogenId === pathogenId);
+            if (assays.length === 0) return null;
+            const cfg = PATHOGENS[pathogenId];
+            const headingId = `assay-picker-${pathogenId}`;
+
+            return (
+              <div key={pathogenId} className="flex flex-col gap-2">
+                <h3 id={headingId} className="text-sm font-semibold text-slate-900">
+                  {cfg.label}
+                </h3>
+                <ul aria-labelledby={headingId} className="divide-y divide-slate-200 border-y border-slate-200">
+                  {assays.map((assay) => (
+                    <li key={assay.id} className="flex flex-col items-start gap-1 py-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          select(assay);
+                        }}
+                        className="text-left font-medium text-slate-900 underline"
+                      >
+                        {assay.name}
+                      </button>
+                      <p className="text-sm text-slate-700">
+                        {assay.target} &middot; {assay.oligos.length} oligos
+                      </p>
+                      <a
+                        href={assay.citation.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={assay.citation.title}
+                        className="text-sm text-slate-700 underline"
+                      >
+                        {`Source: ${shortSource(assay.citation.source)}`}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      </details>
     </section>
   );
 }

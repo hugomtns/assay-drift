@@ -15,6 +15,46 @@ describe('App', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('starts with published assays and mounts pasted input only after it is selected', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const published = screen.getByRole('tab', { name: /choose a published assay/i });
+    const paste = screen.getByRole('tab', { name: /paste my own oligos/i });
+    expect(published).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: /see how the cdc n1 assay has drifted/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/paste your oligos/i)).not.toBeInTheDocument();
+
+    await user.click(paste);
+
+    expect(paste).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByLabelText(/paste your oligos/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /see how the cdc n1 assay has drifted/i })).not.toBeInTheDocument();
+  });
+
+  it('moves between entry paths with the expected tab keys', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const published = screen.getByRole('tab', { name: /choose a published assay/i });
+    const paste = screen.getByRole('tab', { name: /paste my own oligos/i });
+    published.focus();
+    await user.keyboard('{ArrowRight}');
+
+    expect(paste).toHaveFocus();
+    expect(paste).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByLabelText(/paste your oligos/i)).toBeInTheDocument();
+  });
+
+  it('runs the recommended example in one click', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /see how the cdc n1 assay has drifted/i }));
+
+    expect(useAppStore.getState().status).toBe('loading');
+  });
+
   it('only explains pathogen reset after a destructive change is attempted', async () => {
     const user = userEvent.setup();
     render(<App />);

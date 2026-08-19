@@ -260,6 +260,7 @@ describe('2. every interactive control is reachable and operable by keyboard', (
   it('keeps a blocked step-1 "Continue" in the tab order and says why', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await user.click(screen.getByRole('tab', { name: /paste my own oligos/i }));
     const textarea = screen.getByLabelText(/paste your oligos/i);
     // A valid oligo with no role: Continue must be inert but reachable.
     await user.click(textarea);

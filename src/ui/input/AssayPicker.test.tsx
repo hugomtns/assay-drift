@@ -9,6 +9,12 @@ beforeEach(() => {
 });
 
 describe('AssayPicker', () => {
+  it('keeps the full library behind a compact disclosure', () => {
+    render(<AssayPicker />);
+
+    expect(screen.getByText(/browse published assays/i).closest('details')).not.toHaveAttribute('open');
+  });
+
   it('loads a chosen assay into the store with every role already assigned', async () => {
     render(<AssayPicker />);
 
