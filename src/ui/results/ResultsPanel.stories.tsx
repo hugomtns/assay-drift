@@ -59,3 +59,16 @@ export const Warning: Story = {
     },
   },
 };
+
+export const InsufficientData: Story = {
+  args: {
+    result: {
+      ...routineResult,
+      oligos: routineResult.oligos.map((oligo) => ({
+        ...oligo,
+        metrics: { ...oligo.metrics, sufficientData: false },
+        severity: { ...oligo.severity, level: 'unknown' as const, reasons: ['Too few assessable sequences.'] },
+      })),
+    },
+  },
+};

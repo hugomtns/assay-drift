@@ -39,3 +39,9 @@ export const ParseError: Story = {
 export const NarrowViewport: Story = {
   parameters: { viewport: { defaultViewport: 'narrow' } },
 };
+
+export const LongContent: Story = {
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.type(canvas.getByLabelText(/paste your oligos/i), '>A deliberately long oligo name that must wrap safely on narrow screens\nGACCCCAAAATCAGCGAAAT');
+  },
+};
